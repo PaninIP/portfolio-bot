@@ -2,6 +2,8 @@ from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.types import Message
 
+from app.bot.keyboards.main_menu import get_main_menu_keyboard
+
 
 router = Router(name=__name__)
 
@@ -21,5 +23,6 @@ async def handle_start(message: Message) -> None:
         "Я бот-помощник Ивана Панина.\n"
         "Здесь можно узнать об услугах по разработке Telegram-ботов "
         "и оставить заявку на создание проекта.\n\n"
-        "Сейчас бот находится в разработке."
+        "Выберите нужный раздел в меню ниже.",
+        reply_markup=get_main_menu_keyboard(),
     )

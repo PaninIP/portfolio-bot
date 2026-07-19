@@ -1,5 +1,6 @@
 from aiogram import Router
 
+from app.bot.handlers.main_menu import router as main_menu_router
 from app.bot.handlers.start import router as start_router
 
 
@@ -9,5 +10,6 @@ def get_handlers_router() -> Router:
     router = Router(name="handlers")
 
     router.include_router(start_router)
+    router.include_router(main_menu_router)
 
     return router
