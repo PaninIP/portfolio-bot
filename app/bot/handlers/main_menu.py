@@ -17,7 +17,7 @@ async def handle_about(message: Message) -> None:
     """Show information about the developer."""
 
     await message.answer(
-        "Меня зовут Иван.\n\n"
+        "Я Panini.\n\n"
         "Я разрабатываю Telegram-ботов для автоматизации бизнес-процессов, "
         "сбора заявок, взаимодействия с клиентами и интеграции внешних сервисов.\n\n"
         "В работе я уделяю внимание структуре проекта, безопасности данных "
