@@ -2,45 +2,36 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
-from aiogram.filters import CommandStart
-from aiogram.types import Message
 
+from app.bot.handlers import get_handlers_router
 from app.config import get_settings
 
 
-dispatcher = Dispatcher()
+def configure_logging() -> None:
+    """Configure application logging."""
 
-
-@dispatcher.message(CommandStart())
-async def handle_start(message: Message) -> None:
-    """Handle the /start command."""
-
-    first_name = (
-        message.from_user.first_name
-        if message.from_user
-        else "пользователь"
-    )
-
-    await message.answer(
-        f"Привет, {first_name}!\n\n"
-        "Я бот-помощник Ивана Панина.\n"
-        "Здесь можно узнать об услугах по разработке Telegram-ботов "
-        "и оставить заявку на создание проекта.\n\n"
-        "Сейчас бот находится в разработке."
+    logging.basicConfig(
+        level=logging.INFO,
+        format=(
+            "%(asctime)s | %(levelname)s | "
+            "%(name)s | %(message)s"
+        ),
     )
 
 
 async def main() -> None:
-    """Start the Telegram bot using long polling."""
+    """Configure and start the Telegram bot."""
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    )
+    configure_logging()
 
     settings = get_settings()
 
-    bot = Bot(token=settings.bot_token.get_secret_value())
+    bot = Bot(
+        token=settings.bot_token.get_secret_value(),
+    )
+
+    dispatcher = Dispatcher()
+    dispatcher.include_router(get_handlers_router())
 
     try:
         await dispatcher.start_polling(bot)
