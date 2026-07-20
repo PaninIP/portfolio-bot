@@ -16,6 +16,10 @@ from aiogram.exceptions import TelegramAPIError
 from app.config import get_settings
 from app.services.lead_notification import send_lead_to_admin
 
+from app.services.admin_service import (
+    admin_notifications_enabled,
+)
+
 from app.bot.keyboards.lead_form import (
     CANCEL_BUTTON,
     CONFIRM_BUTTON,
@@ -492,13 +496,26 @@ async def handle_confirmation(
 
     data = await state.get_data()
 
-    try:
-        submission = LeadSubmission.from_fsm_data(data)
-        lead_id = await create_lead(submission)
-    except (KeyError, ValueError, SQLAlchemyError):
-        logger.exception(
-            "Failed to persist a project request"
-        )
+    notifications_enabled = (
+    await admin_notifications_enabled(
+        settings.admin_chat_id
+    )
+)
+
+    if notifications_enabled:
+        try:
+            await send_lead_to_admin(
+                bot=message.bot,
+                admin_chat_id=settings.admin_chat_id,
+                lead_id=lead_id,
+                summary=summary,
+                data=data,
+            )
+        except TelegramAPIError:
+            logger.exception(
+                "Lead %s was saved, but admin notification failed",
+                lead_id,
+            )
 
         await message.answer(
             "Не удалось сохранить заявку.\n\n"
