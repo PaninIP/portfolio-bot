@@ -1,3 +1,4 @@
+from email import message
 import logging
 from html import escape
 
@@ -24,6 +25,7 @@ from app.bot.keyboards.admin import (
 )
 from app.bot.states.admin import LeadCloseForm
 from app.database.enums import LeadStatus
+from app.database.models import user
 from app.services.admin_lead_service import (
     get_admin_lead,
 )
@@ -45,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 async def restore_admin_keyboard(
     message: Message,
+    admin_telegram_id: int,
 ) -> None:
     """Restore the administrator reply keyboard."""
 
@@ -129,6 +132,11 @@ async def handle_cancel_close_by_text(
 ) -> None:
     """Cancel closing before confirmation."""
 
+    user = message.from_user
+
+    if user is None:
+        return
+
     await state.clear()
 
     await message.answer(
@@ -136,7 +144,10 @@ async def handle_cancel_close_by_text(
         reply_markup=ReplyKeyboardRemove(),
     )
 
-    await restore_admin_keyboard(message)
+    await restore_admin_keyboard(
+        message,
+        admin_telegram_id=user.id,
+    )
 
 
 @router.message(
@@ -209,12 +220,14 @@ async def handle_cancel_close(
     await state.clear()
 
     await callback.message.edit_text(
-        "Закрытие заявки отменено."
-    )
+    "Закрытие заявки отменено."
+)
 
     await restore_admin_keyboard(
-        callback.message
+        callback.message,
+        admin_telegram_id=callback.from_user.id,
     )
+
     await callback.answer()
 
 
@@ -355,7 +368,8 @@ async def handle_confirm_close(
     )
 
     await restore_admin_keyboard(
-        callback.message
+        callback.message,
+        admin_telegram_id=user.id,
     )
 
     await callback.answer(

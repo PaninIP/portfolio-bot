@@ -495,12 +495,44 @@ async def handle_confirmation(
     """Persist and confirm the collected project request."""
 
     data = await state.get_data()
+    settings = get_settings()
 
-    notifications_enabled = (
-    await admin_notifications_enabled(
-        settings.admin_chat_id
-    )
-)
+    try:
+        submission = LeadSubmission.from_fsm_data(data)
+        lead_id = await create_lead(submission)
+    except (KeyError, ValueError, SQLAlchemyError):
+        logger.exception(
+            "Failed to persist a project request"
+        )
+
+        await message.answer(
+            "Не удалось сохранить заявку.\n\n"
+            "Попробуйте подтвердить её повторно. "
+            "Если ошибка сохранится, заполните заявку заново.",
+            reply_markup=get_confirmation_keyboard(),
+        )
+        return
+
+    summary = build_lead_summary(data)
+
+    # Заявка уже сохранена в PostgreSQL.
+    # Повторное подтверждение больше не требуется.
+    await state.clear()
+
+    notifications_enabled = False
+
+    try:
+        notifications_enabled = (
+            await admin_notifications_enabled(
+                settings.admin_chat_id
+            )
+        )
+    except SQLAlchemyError:
+        logger.exception(
+            "Failed to read notification settings "
+            "for lead %s",
+            lead_id,
+        )
 
     if notifications_enabled:
         try:
@@ -513,37 +545,10 @@ async def handle_confirmation(
             )
         except TelegramAPIError:
             logger.exception(
-                "Lead %s was saved, but admin notification failed",
+                "Lead %s was saved, "
+                "but admin notification failed",
                 lead_id,
             )
-
-        await message.answer(
-            "Не удалось сохранить заявку.\n\n"
-            "Попробуйте подтвердить её повторно. "
-            "Если ошибка сохранится, заполните заявку заново.",
-            reply_markup=get_confirmation_keyboard(),
-        )
-        return
-
-    summary = build_lead_summary(data)
-    settings = get_settings()
-
-    # Заявка уже сохранена. Повторное подтверждение больше не нужно.
-    await state.clear()
-
-    try:
-        await send_lead_to_admin(
-            bot=message.bot,
-            admin_chat_id=settings.admin_chat_id,
-            lead_id=lead_id,
-            summary=summary,
-            data=data,
-        )
-    except TelegramAPIError:
-        logger.exception(
-            "Lead %s was saved, but admin notification failed",
-            lead_id,
-        )
 
     await message.answer(
         f"Заявка №{lead_id} принята и сохранена.\n\n"
