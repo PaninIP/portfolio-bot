@@ -1,6 +1,5 @@
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
-
 CANCEL_BUTTON = "Отменить"
 SKIP_BUTTON = "Пропустить"
 CONFIRM_BUTTON = "Подтвердить заявку"

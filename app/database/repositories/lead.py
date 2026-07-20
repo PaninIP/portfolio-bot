@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.enums import LeadStatus
 from app.database.models.lead import Lead, LeadStatusHistory
+from sqlalchemy import func, select
 
 
 class LeadRepository:
@@ -9,6 +10,46 @@ class LeadRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def get_status_counts(
+        self,
+    ) -> dict[LeadStatus, int]:
+        """Return the number of leads grouped by status."""
+
+        statement = (
+            select(
+                Lead.status,
+                func.count(Lead.id),
+            )
+            .group_by(Lead.status)
+        )
+
+        result = await self._session.execute(statement)
+
+        return {
+            status: int(count)
+            for status, count in result.all()
+        }
+
+    async def get_status_counts(
+        self,
+    ) -> dict[LeadStatus, int]:
+        """Return the number of leads grouped by status."""
+
+        statement = (
+            select(
+                Lead.status,
+                func.count(Lead.id),
+            )
+            .group_by(Lead.status)
+        )
+
+        result = await self._session.execute(statement)
+
+        return {
+            status: int(count)
+            for status, count in result.all()
+        }
 
     async def create(
         self,
