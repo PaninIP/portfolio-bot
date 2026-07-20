@@ -1,4 +1,6 @@
 from app.bot.callbacks.admin import (
+    LeadCloseCallback,
+    LeadCloseDecisionCallback,
     LeadOpenCallback,
     LeadPageCallback,
     LeadStatusCallback,
@@ -6,6 +8,8 @@ from app.bot.callbacks.admin import (
 
 
 __all__ = [
+    "LeadCloseCallback",
+    "LeadCloseDecisionCallback",
     "LeadOpenCallback",
     "LeadPageCallback",
     "LeadStatusCallback",

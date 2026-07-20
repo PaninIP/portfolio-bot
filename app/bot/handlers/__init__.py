@@ -7,6 +7,9 @@ from app.bot.handlers.start import router as start_router
 from app.bot.handlers.admin_leads import (
     router as admin_leads_router,
 )
+from app.bot.handlers.admin_close import (
+    router as admin_close_router,
+)
 
 def get_handlers_router() -> Router:
     """Create and return the root handlers router."""
@@ -16,6 +19,7 @@ def get_handlers_router() -> Router:
     router.include_router(start_router)
     router.include_router(admin_router)
     router.include_router(admin_leads_router)
+    router.include_router(admin_close_router)
     router.include_router(lead_form_router)
     router.include_router(main_menu_router)
 

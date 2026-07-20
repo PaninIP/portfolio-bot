@@ -16,6 +16,7 @@ class LeadListType(StrEnum):
 
     NEW = "new"
     ACTIVE = "active"
+    ARCHIVE = "archive"
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +46,9 @@ def get_list_statuses(
 
     if list_type == LeadListType.NEW:
         return (LeadStatus.NEW,)
+
+    if list_type == LeadListType.ARCHIVE:
+        return (LeadStatus.CLOSED,)
 
     return (
         LeadStatus.IN_PROGRESS,

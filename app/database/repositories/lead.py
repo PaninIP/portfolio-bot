@@ -1,13 +1,16 @@
 from collections.abc import Collection
+from datetime import datetime, timezone
 
-from alembic.command import history
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.enums import LeadStatus
-from app.database.models import lead
-from app.database.models.lead import Lead, LeadStatusHistory
+from app.database.models.lead import (
+    Lead,
+    LeadAdminComment,
+    LeadStatusHistory,
+)
 
 
 class LeadRepository:
@@ -15,47 +18,6 @@ class LeadRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
-
-    async def change_status(
-        self,
-        *,
-        lead_id: int,
-        allowed_from: Collection[LeadStatus],
-        new_status: LeadStatus,
-        admin_telegram_id: int,
-        comment: str,
-    ) -> tuple[Lead | None, bool]:
-        """Change a lead status and append a history record."""
-
-        statement = (
-            select(Lead)
-            .where(Lead.id == lead_id)
-            .with_for_update()
-        )
-
-        lead = await self._session.scalar(statement)
-
-        if lead is None:
-            return None, False
-
-        if lead.status not in allowed_from:
-            return lead, False
-
-        old_status = lead.status
-        lead.status = new_status
-    
-        history = LeadStatusHistory(
-            lead_id=lead.id,
-            old_status=old_status,
-            new_status=new_status,
-            admin_telegram_id=admin_telegram_id,
-            comment=comment,
-        )
-
-        self._session.add(history)
-        await self._session.flush()
-
-        return lead, True
 
     async def create(
         self,
@@ -170,3 +132,136 @@ class LeadRepository:
         )
 
         return await self._session.scalar(statement)
+
+    async def change_status(
+        self,
+        *,
+        lead_id: int,
+        allowed_from: Collection[LeadStatus],
+        new_status: LeadStatus,
+        admin_telegram_id: int,
+        comment: str,
+    ) -> tuple[Lead | None, bool]:
+        """Change a lead status and append a history record."""
+
+        statement = (
+            select(Lead)
+            .where(Lead.id == lead_id)
+            .with_for_update()
+        )
+
+        lead = await self._session.scalar(statement)
+
+        if lead is None:
+            return None, False
+
+        if lead.status not in allowed_from:
+            return lead, False
+
+        old_status = lead.status
+        lead.status = new_status
+
+        history = LeadStatusHistory(
+            lead_id=lead.id,
+            old_status=old_status,
+            new_status=new_status,
+            admin_telegram_id=admin_telegram_id,
+            comment=comment,
+        )
+
+        self._session.add(history)
+        await self._session.flush()
+
+        return lead, True
+
+    async def close(
+        self,
+        *,
+        lead_id: int,
+        allowed_from: Collection[LeadStatus],
+        admin_telegram_id: int,
+        comment: str,
+    ) -> tuple[
+        Lead | None,
+        bool,
+        LeadAdminComment | None,
+    ]:
+        """Close a lead and save its closing comment."""
+
+        statement = (
+            select(Lead)
+            .options(selectinload(Lead.user))
+            .where(Lead.id == lead_id)
+            .with_for_update()
+        )
+
+        lead = await self._session.scalar(statement)
+
+        if lead is None:
+            return None, False, None
+
+        if lead.status not in allowed_from:
+            return lead, False, None
+
+        old_status = lead.status
+
+        lead.status = LeadStatus.CLOSED
+        lead.close_comment = comment
+        lead.closed_at = datetime.now(timezone.utc)
+
+        history = LeadStatusHistory(
+            lead_id=lead.id,
+            old_status=old_status,
+            new_status=LeadStatus.CLOSED,
+            admin_telegram_id=admin_telegram_id,
+            comment=comment,
+        )
+
+        admin_comment = LeadAdminComment(
+            lead_id=lead.id,
+            admin_telegram_id=admin_telegram_id,
+            comment=comment,
+            is_sent_to_client=False,
+        )
+
+        self._session.add_all(
+            [
+                history,
+                admin_comment,
+            ]
+        )
+
+        await self._session.flush()
+
+        return lead, True, admin_comment
+
+    async def mark_admin_comment_delivery(
+        self,
+        *,
+        comment_id: int,
+        delivered: bool,
+        error_message: str | None,
+    ) -> bool:
+        """Store the delivery result of an admin comment."""
+
+        statement = (
+            select(LeadAdminComment)
+            .where(
+                LeadAdminComment.id == comment_id
+            )
+            .with_for_update()
+        )
+
+        admin_comment = await self._session.scalar(
+            statement
+        )
+
+        if admin_comment is None:
+            return False
+
+        admin_comment.is_sent_to_client = delivered
+        admin_comment.delivery_error = error_message
+
+        await self._session.flush()
+
+        return True
