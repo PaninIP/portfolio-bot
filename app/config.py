@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     bot_token: SecretStr
+    admin_chat_id: int
 
     model_config = SettingsConfigDict(
         env_file=".env",
