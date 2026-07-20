@@ -5,6 +5,11 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from aiogram.exceptions import TelegramAPIError
+
+from app.config import get_settings
+from app.services.lead_notification import send_lead_to_admin
+
 from app.bot.keyboards.lead_form import (
     CANCEL_BUTTON,
     CONFIRM_BUTTON,
@@ -475,13 +480,33 @@ async def handle_confirmation(
     message: Message,
     state: FSMContext,
 ) -> None:
-    """Confirm the collected project request."""
+    """Confirm and send the project request."""
+
+    data = await state.get_data()
+    summary = build_lead_summary(data)
+    settings = get_settings()
+
+    try:
+        await send_lead_to_admin(
+            bot=message.bot,
+            admin_chat_id=settings.admin_chat_id,
+            summary=summary,
+            data=data,
+        )
+    except TelegramAPIError:
+        await message.answer(
+            "Не удалось передать заявку Ивану.\n\n"
+            "Данные сохранены в текущем диалоге. "
+            "Попробуйте нажать «Подтвердить заявку» ещё раз.",
+            reply_markup=get_confirmation_keyboard(),
+        )
+        return
 
     await state.clear()
 
     await message.answer(
-        "Заявка принята.\n\n"
-        "Иван свяжется с вами для уточнения деталей "
+        "Заявка принята и передана Ивану.\n\n"
+        "Он свяжется с вами для уточнения деталей "
         "и согласования дальнейшей работы.",
         reply_markup=get_main_menu_keyboard(),
     )
