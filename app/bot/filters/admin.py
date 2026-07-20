@@ -1,5 +1,5 @@
 from aiogram.filters import Filter
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from app.services.admin_service import (
     activate_admin,
@@ -12,9 +12,9 @@ class IsAdmin(Filter):
 
     async def __call__(
         self,
-        message: Message,
+        event: Message | CallbackQuery,
     ) -> bool:
-        user = message.from_user
+        user = event.from_user
 
         if user is None:
             return False
