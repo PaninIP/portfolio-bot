@@ -74,3 +74,24 @@ async def send_lead_to_admin(
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
+
+async def send_lead_closed_to_client(
+    *,
+    bot: Bot,
+    client_telegram_id: int,
+    lead_id: int,
+    comment: str,
+) -> None:
+    """Notify a client that their lead has been closed."""
+
+    await bot.send_message(
+        chat_id=client_telegram_id,
+        text=(
+            f"<b>Ваша заявка №{lead_id} закрыта.</b>\n\n"
+            f"<b>Комментарий:</b>\n"
+            f"{escape(comment)}\n\n"
+            "При необходимости вы можете оставить "
+            "новую заявку."
+        ),
+        parse_mode="HTML",
+    )

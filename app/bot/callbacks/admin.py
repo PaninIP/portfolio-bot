@@ -1,5 +1,26 @@
 from aiogram.filters.callback_data import CallbackData
 
+class LeadCloseCallback(
+    CallbackData,
+    prefix="lead_close",
+):
+    """Callback for starting lead closure."""
+
+    lead_id: int
+    list_type: str
+    page: int
+
+
+class LeadCloseDecisionCallback(
+    CallbackData,
+    prefix="lead_close_decision",
+):
+    """Callback for confirming or cancelling lead closure."""
+
+    action: str
+    lead_id: int
+    list_type: str
+    page: int
 
 class LeadPageCallback(
     CallbackData,

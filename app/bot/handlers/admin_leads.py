@@ -8,14 +8,19 @@ from app.bot.callbacks import (
     LeadPageCallback,
 )
 from app.bot.filters import IsAdmin
+
 from app.bot.keyboards.admin import (
     ACTIVE_LEADS_BUTTON,
+    ARCHIVE_BUTTON,
     NEW_LEADS_BUTTON,
     get_lead_card_keyboard,
     get_lead_list_keyboard,
 )
+
 from app.database.enums import LeadStatus
 from app.database.models.lead import Lead
+from app.database.repositories import lead
+from app.database.repositories import lead
 from app.services.admin_lead_service import (
     LeadListType,
     LeadPage,
@@ -53,11 +58,13 @@ def build_lead_list_text(
 ) -> str:
     """Build the administrator lead-list heading."""
 
-    title = (
-        "Новые заявки"
-        if page.list_type == LeadListType.NEW
-        else "Активные заявки"
-    )
+    titles = {
+        LeadListType.NEW: "Новые заявки",
+        LeadListType.ACTIVE: "Активные заявки",
+        LeadListType.ARCHIVE: "Архив",
+    }
+
+    title = titles[page.list_type]
 
     if page.total_items == 0:
         return (
@@ -83,6 +90,7 @@ def build_lead_card_text(lead: Lead) -> str:
     """Build a full administrator lead card."""
 
     user = lead.user
+
     username = (
         f"@{user.username}"
         if user.username
@@ -96,12 +104,30 @@ def build_lead_card_text(lead: Lead) -> str:
             user.last_name,
         )
         if part
-    )
+    ) or "не указано"
 
     status = STATUS_LABELS.get(
         lead.status,
         lead.status.value,
     )
+
+    closed_section = ""
+
+    if lead.status == LeadStatus.CLOSED:
+        closed_at_text = (
+            lead.closed_at.strftime(
+                "%d.%m.%Y %H:%M"
+            )
+            if lead.closed_at
+            else "не указана"
+        )
+
+        closed_section = (
+            "\n\n<b>Закрытие заявки:</b>\n"
+            f"<b>Дата:</b> {closed_at_text}\n"
+            f"<b>Комментарий:</b> "
+            f"{safe(lead.close_comment or 'не указан')}"
+        )
 
     return (
         f"<b>Заявка №{lead.id}</b>\n\n"
@@ -125,8 +151,9 @@ def build_lead_card_text(lead: Lead) -> str:
         f"{safe(lead.deadline)}\n"
         f"<b>Бюджет:</b> "
         f"{safe(lead.budget)}\n\n"
-        f"<b>Комментарий:</b>\n"
+        f"<b>Комментарий клиента:</b>\n"
         f"{safe(lead.client_comment or 'не указан')}"
+        f"{closed_section}"
     )
 
 
@@ -327,4 +354,17 @@ async def handle_take_lead_in_progress(
 
     await callback.answer(
         "Заявка взята в работу."
+    )
+
+@router.message(
+    IsAdmin(),
+    F.text == ARCHIVE_BUTTON,
+)
+async def handle_archive(message: Message) -> None:
+    """Show closed project requests."""
+
+    await send_lead_page(
+        message,
+        list_type=LeadListType.ARCHIVE,
+        page_number=1,
     )
