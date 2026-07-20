@@ -32,14 +32,12 @@ def build_client_profile_link(
     else:
         return link_text
 
-    return (
-        f'<a href="{profile_url}">'
-        f"{link_text}"
-        f"</a>"
-    )
+    return f'<a href="{profile_url}">{link_text}</a>'
 
 
 def build_admin_notification(
+    *,
+    lead_id: int,
     summary: str,
     data: dict[str, Any],
 ) -> str:
@@ -48,21 +46,24 @@ def build_admin_notification(
     profile_link = build_client_profile_link(data)
 
     return (
-        "<b>Новая заявка на разработку Telegram-бота</b>\n\n"
+        f"<b>Новая заявка №{lead_id}</b>\n\n"
         f"<b>Профиль клиента:</b> {profile_link}\n\n"
         f"{summary}"
     )
 
 
 async def send_lead_to_admin(
+    *,
     bot: Bot,
     admin_chat_id: int,
+    lead_id: int,
     summary: str,
     data: dict[str, Any],
 ) -> None:
     """Send a confirmed project request to the administrator."""
 
     notification = build_admin_notification(
+        lead_id=lead_id,
         summary=summary,
         data=data,
     )

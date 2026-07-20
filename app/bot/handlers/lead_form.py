@@ -1,3 +1,9 @@
+import logging
+
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.services.lead_service import LeadSubmission, create_lead
+
 from html import escape
 from typing import Any
 
@@ -31,6 +37,8 @@ from app.bot.states.lead_form import LeadForm
 
 
 router = Router(name=__name__)
+
+logger = logging.getLogger(__name__)
 
 
 def get_message_text(message: Message) -> str | None:
@@ -480,33 +488,49 @@ async def handle_confirmation(
     message: Message,
     state: FSMContext,
 ) -> None:
-    """Confirm and send the project request."""
+    """Persist and confirm the collected project request."""
 
     data = await state.get_data()
+
+    try:
+        submission = LeadSubmission.from_fsm_data(data)
+        lead_id = await create_lead(submission)
+    except (KeyError, ValueError, SQLAlchemyError):
+        logger.exception(
+            "Failed to persist a project request"
+        )
+
+        await message.answer(
+            "Не удалось сохранить заявку.\n\n"
+            "Попробуйте подтвердить её повторно. "
+            "Если ошибка сохранится, заполните заявку заново.",
+            reply_markup=get_confirmation_keyboard(),
+        )
+        return
+
     summary = build_lead_summary(data)
     settings = get_settings()
+
+    # Заявка уже сохранена. Повторное подтверждение больше не нужно.
+    await state.clear()
 
     try:
         await send_lead_to_admin(
             bot=message.bot,
             admin_chat_id=settings.admin_chat_id,
+            lead_id=lead_id,
             summary=summary,
             data=data,
         )
     except TelegramAPIError:
-        await message.answer(
-            "Не удалось передать заявку Ивану.\n\n"
-            "Данные сохранены в текущем диалоге. "
-            "Попробуйте нажать «Подтвердить заявку» ещё раз.",
-            reply_markup=get_confirmation_keyboard(),
+        logger.exception(
+            "Lead %s was saved, but admin notification failed",
+            lead_id,
         )
-        return
-
-    await state.clear()
 
     await message.answer(
-        "Заявка принята и передана Ивану.\n\n"
-        "Он свяжется с вами для уточнения деталей "
+        f"Заявка №{lead_id} принята и сохранена.\n\n"
+        "Иван свяжется с вами для уточнения деталей "
         "и согласования дальнейшей работы.",
         reply_markup=get_main_menu_keyboard(),
     )
