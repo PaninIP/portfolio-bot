@@ -50,14 +50,3 @@ async def handle_portfolio(message: Message) -> None:
         "Здесь будут размещены описания проектов, используемые технологии "
         "и результаты автоматизации."
     )
-
-
-@router.message(F.text == DISCUSS_PROJECT_BUTTON)
-async def handle_discuss_project(message: Message) -> None:
-    """Start the project discussion flow."""
-
-    await message.answer(
-        "Хорошо. Далее я задам несколько вопросов о вашем проекте "
-        "и сформирую предварительное техническое задание.\n\n"
-        "Форма сбора заявки будет добавлена на следующем этапе."
-    )
