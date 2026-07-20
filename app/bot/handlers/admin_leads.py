@@ -23,6 +23,19 @@ from app.services.admin_lead_service import (
     get_lead_page,
 )
 
+from app.bot.callbacks import (
+    LeadOpenCallback,
+    LeadPageCallback,
+    LeadStatusCallback,
+)
+
+from app.services.admin_lead_service import (
+    LeadListType,
+    LeadPage,
+    get_admin_lead,
+    get_lead_page,
+    take_lead_in_progress,
+)
 
 router = Router(name=__name__)
 
@@ -244,3 +257,74 @@ async def handle_open_lead(
     )
 
     await callback.answer()
+
+@router.callback_query(
+    IsAdmin(),
+    LeadStatusCallback.filter(
+        F.target_status
+        == LeadStatus.IN_PROGRESS.value
+    ),
+)
+async def handle_take_lead_in_progress(
+    callback: CallbackQuery,
+    callback_data: LeadStatusCallback,
+) -> None:
+    """Move a new lead into active work."""
+
+    user = callback.from_user
+
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    result = await take_lead_in_progress(
+        lead_id=callback_data.lead_id,
+        admin_telegram_id=user.id,
+    )
+
+    if not result.found:
+        await callback.answer(
+            "Заявка не найдена.",
+            show_alert=True,
+        )
+        return
+
+    if not result.changed:
+        status_label = (
+            STATUS_LABELS.get(
+                result.current_status,
+                "неизвестный статус",
+            )
+        )
+
+        await callback.answer(
+            f"Статус заявки уже изменён: "
+            f"{status_label}.",
+            show_alert=True,
+        )
+        return
+
+    lead = await get_admin_lead(
+        callback_data.lead_id
+    )
+
+    if lead is None:
+        await callback.answer(
+            "Не удалось обновить карточку заявки.",
+            show_alert=True,
+        )
+        return
+
+    await callback.message.edit_text(
+        build_lead_card_text(lead),
+        parse_mode="HTML",
+        reply_markup=get_lead_card_keyboard(
+            lead=lead,
+            list_type=LeadListType.ACTIVE.value,
+            page=1,
+        ),
+    )
+
+    await callback.answer(
+        "Заявка взята в работу."
+    )

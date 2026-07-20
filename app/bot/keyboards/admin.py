@@ -14,6 +14,13 @@ from app.bot.callbacks import (
 )
 from app.database.models.lead import Lead
 
+from app.bot.callbacks import (
+    LeadOpenCallback,
+    LeadPageCallback,
+    LeadStatusCallback,
+)
+
+from app.database.enums import LeadStatus
 
 ADMIN_PANEL_BUTTON = "Админ-панель"
 NEW_LEADS_BUTTON = "Новые заявки"
@@ -131,6 +138,21 @@ def get_lead_card_keyboard(
 
     builder = InlineKeyboardBuilder()
     user = lead.user
+
+    if lead.status == LeadStatus.NEW:
+        builder.row(
+            InlineKeyboardButton(
+                text="Взять в работу",
+                callback_data=LeadStatusCallback(
+                    lead_id=lead.id,
+                    target_status=(
+                        LeadStatus.IN_PROGRESS.value
+                    ),
+                    list_type=list_type,
+                    page=page,
+                ).pack(),
+            )
+        )
 
     if user.username:
         profile_url = f"https://t.me/{user.username}"

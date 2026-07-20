@@ -1,10 +1,12 @@
 from collections.abc import Collection
 
+from alembic.command import history
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.enums import LeadStatus
+from app.database.models import lead
 from app.database.models.lead import Lead, LeadStatusHistory
 
 
@@ -13,6 +15,47 @@ class LeadRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def change_status(
+        self,
+        *,
+        lead_id: int,
+        allowed_from: Collection[LeadStatus],
+        new_status: LeadStatus,
+        admin_telegram_id: int,
+        comment: str,
+    ) -> tuple[Lead | None, bool]:
+        """Change a lead status and append a history record."""
+
+        statement = (
+            select(Lead)
+            .where(Lead.id == lead_id)
+            .with_for_update()
+        )
+
+        lead = await self._session.scalar(statement)
+
+        if lead is None:
+            return None, False
+
+        if lead.status not in allowed_from:
+            return lead, False
+
+        old_status = lead.status
+        lead.status = new_status
+    
+        history = LeadStatusHistory(
+            lead_id=lead.id,
+            old_status=old_status,
+            new_status=new_status,
+            admin_telegram_id=admin_telegram_id,
+            comment=comment,
+        )
+
+        self._session.add(history)
+        await self._session.flush()
+
+        return lead, True
 
     async def create(
         self,

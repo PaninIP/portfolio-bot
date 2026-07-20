@@ -20,3 +20,15 @@ class LeadOpenCallback(
     lead_id: int
     list_type: str
     page: int
+
+
+class LeadStatusCallback(
+    CallbackData,
+    prefix="lead_status",
+):
+    """Callback for changing a lead status."""
+
+    lead_id: int
+    target_status: str
+    list_type: str
+    page: int

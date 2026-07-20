@@ -29,6 +29,15 @@ class LeadPage:
     total_items: int
 
 
+@dataclass(frozen=True, slots=True)
+class LeadStatusChangeResult:
+    """Result of an administrator status-change operation."""
+
+    found: bool
+    changed: bool
+    current_status: LeadStatus | None
+
+
 def get_list_statuses(
     list_type: LeadListType,
 ) -> tuple[LeadStatus, ...]:
@@ -96,3 +105,38 @@ async def get_admin_lead(
         return await repository.get_by_id_with_user(
             lead_id
         )
+
+
+async def take_lead_in_progress(
+    *,
+    lead_id: int,
+    admin_telegram_id: int,
+) -> LeadStatusChangeResult:
+    """Move a new lead into active work."""
+
+    async with async_session_factory() as session:
+        async with session.begin():
+            repository = LeadRepository(session)
+
+            lead, changed = await repository.change_status(
+                lead_id=lead_id,
+                allowed_from=(LeadStatus.NEW,),
+                new_status=LeadStatus.IN_PROGRESS,
+                admin_telegram_id=admin_telegram_id,
+                comment=(
+                    "Заявка взята администратором в работу"
+                ),
+            )
+
+            if lead is None:
+                return LeadStatusChangeResult(
+                    found=False,
+                    changed=False,
+                    current_status=None,
+                )
+
+            return LeadStatusChangeResult(
+                found=True,
+                changed=changed,
+                current_status=lead.status,
+            )
