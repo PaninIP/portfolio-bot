@@ -16,6 +16,7 @@ from app.bot.callbacks import (
     LeadCloseDecisionCallback,
     LeadOpenCallback,
     LeadPageCallback,
+    LeadReopenCallback,
     LeadStatusCallback,
 )
 from app.database.enums import LeadStatus
@@ -31,6 +32,7 @@ ENABLE_NOTIFICATIONS_BUTTON = "🔔 Включить уведомления"
 DISABLE_NOTIFICATIONS_BUTTON = "🔕 Отключить уведомления"
 USER_MODE_BUTTON = "👤 Пользовательский режим"
 CLOSE_LEAD_BUTTON = "🔒 Закрыть заявку"
+REOPEN_LEAD_BUTTON = "♻️ Вернуть в работу"
 CANCEL_CLOSE_BUTTON = "↩️ Отменить закрытие"
 
 
@@ -174,6 +176,19 @@ def get_lead_card_keyboard(
                     target_status=(
                         LeadStatus.IN_PROGRESS.value
                     ),
+                    list_type=list_type,
+                    page=page,
+                ).pack(),
+                style=ButtonStyle.SUCCESS,
+            )
+        )
+
+    if lead.status == LeadStatus.CLOSED:
+        builder.row(
+            InlineKeyboardButton(
+                text=REOPEN_LEAD_BUTTON,
+                callback_data=LeadReopenCallback(
+                    lead_id=lead.id,
                     list_type=list_type,
                     page=page,
                 ).pack(),

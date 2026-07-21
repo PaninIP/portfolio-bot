@@ -1,4 +1,3 @@
-from email import message
 import logging
 from html import escape
 
@@ -25,7 +24,6 @@ from app.bot.keyboards.admin import (
 )
 from app.bot.states.admin import LeadCloseForm
 from app.database.enums import LeadStatus
-from app.database.models import user
 from app.services.admin_lead_service import (
     get_admin_lead,
 )
@@ -51,12 +49,9 @@ async def restore_admin_keyboard(
 ) -> None:
     """Restore the administrator reply keyboard."""
 
-    user = message.from_user
-
-    if user is None:
-        return
-
-    data = await get_admin_panel_data(user.id)
+    data = await get_admin_panel_data(
+        admin_telegram_id
+    )
 
     await message.answer(
         "Выберите следующий раздел.",
@@ -220,8 +215,8 @@ async def handle_cancel_close(
     await state.clear()
 
     await callback.message.edit_text(
-    "Закрытие заявки отменено."
-)
+        "Закрытие заявки отменено."
+    )
 
     await restore_admin_keyboard(
         callback.message,

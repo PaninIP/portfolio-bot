@@ -1,10 +1,18 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import StrEnum
 from math import ceil
 
-from app.database.enums import LeadStatus
+from app.database.enums import (
+    DeliveryStatus,
+    LeadStatus,
+    NotificationType,
+)
 from app.database.models.lead import Lead
-from app.database.repositories import LeadRepository
+from app.database.repositories import (
+    LeadRepository,
+    NotificationRepository,
+)
 from app.database.session import async_session_factory
 
 
@@ -37,6 +45,17 @@ class LeadStatusChangeResult:
     found: bool
     changed: bool
     current_status: LeadStatus | None
+
+
+@dataclass(frozen=True, slots=True)
+class LeadReopenResult:
+    """Result of returning a closed lead to active work."""
+
+    found: bool
+    changed: bool
+    current_status: LeadStatus | None
+    lead_id: int | None
+    client_telegram_id: int | None
 
 
 def get_list_statuses(
@@ -143,4 +162,79 @@ async def take_lead_in_progress(
                 found=True,
                 changed=changed,
                 current_status=lead.status,
+            )
+
+
+async def reopen_closed_lead(
+    *,
+    lead_id: int,
+    admin_telegram_id: int,
+) -> LeadReopenResult:
+    """Return a closed lead to active work."""
+
+    async with async_session_factory() as session:
+        async with session.begin():
+            repository = LeadRepository(session)
+
+            lead, changed = await repository.reopen(
+                lead_id=lead_id,
+                admin_telegram_id=admin_telegram_id,
+            )
+
+            if lead is None:
+                return LeadReopenResult(
+                    found=False,
+                    changed=False,
+                    current_status=None,
+                    lead_id=None,
+                    client_telegram_id=None,
+                )
+
+            return LeadReopenResult(
+                found=True,
+                changed=changed,
+                current_status=lead.status,
+                lead_id=lead.id,
+                client_telegram_id=(
+                    lead.user.telegram_user_id
+                ),
+            )
+
+
+async def record_reopen_notification_delivery(
+    *,
+    lead_id: int,
+    recipient_telegram_id: int,
+    delivered: bool,
+    error_message: str | None,
+) -> None:
+    """Store the result of a lead-reopening notification."""
+
+    delivery_status = (
+        DeliveryStatus.DELIVERED
+        if delivered
+        else DeliveryStatus.FAILED
+    )
+
+    delivered_at = (
+        datetime.now(timezone.utc)
+        if delivered
+        else None
+    )
+
+    async with async_session_factory() as session:
+        async with session.begin():
+            repository = NotificationRepository(session)
+
+            await repository.create(
+                lead_id=lead_id,
+                recipient_telegram_id=(
+                    recipient_telegram_id
+                ),
+                notification_type=(
+                    NotificationType.LEAD_STATUS_CHANGED
+                ),
+                delivery_status=delivery_status,
+                error_message=error_message,
+                delivered_at=delivered_at,
             )
