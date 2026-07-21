@@ -16,3 +16,5 @@ wheels/
 
 # VS Code local settings
 .vscode/
+
+.env.production
