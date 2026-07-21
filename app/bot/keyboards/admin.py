@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -15,21 +16,24 @@ from app.bot.callbacks import (
     LeadCloseDecisionCallback,
     LeadOpenCallback,
     LeadPageCallback,
+    LeadReopenCallback,
     LeadStatusCallback,
 )
 from app.database.enums import LeadStatus
 from app.database.models.lead import Lead
 
-ADMIN_PANEL_BUTTON = "Админ-панель"
-NEW_LEADS_BUTTON = "Новые заявки"
-ACTIVE_LEADS_BUTTON = "Активные заявки"
-REFRESH_PANEL_BUTTON = "Обновить статистику"
-ENABLE_NOTIFICATIONS_BUTTON = "Включить уведомления"
-DISABLE_NOTIFICATIONS_BUTTON = "Отключить уведомления"
-USER_MODE_BUTTON = "Пользовательский режим"
-ARCHIVE_BUTTON = "Архив"
-CLOSE_LEAD_BUTTON = "Закрыть заявку"
-CANCEL_CLOSE_BUTTON = "Отменить закрытие"
+
+ADMIN_PANEL_BUTTON = "⚙️ Админ-панель"
+NEW_LEADS_BUTTON = "🆕 Новые заявки"
+ACTIVE_LEADS_BUTTON = "📂 Активные заявки"
+ARCHIVE_BUTTON = "🗄 Архив"
+REFRESH_PANEL_BUTTON = "🔄 Обновить статистику"
+ENABLE_NOTIFICATIONS_BUTTON = "🔔 Включить уведомления"
+DISABLE_NOTIFICATIONS_BUTTON = "🔕 Отключить уведомления"
+USER_MODE_BUTTON = "👤 Пользовательский режим"
+CLOSE_LEAD_BUTTON = "🔒 Закрыть заявку"
+REOPEN_LEAD_BUTTON = "♻️ Вернуть в работу"
+CANCEL_CLOSE_BUTTON = "↩️ Отменить закрытие"
 
 
 def get_admin_keyboard(
@@ -43,34 +47,47 @@ def get_admin_keyboard(
         if notifications_enabled
         else ENABLE_NOTIFICATIONS_BUTTON
     )
+    notification_style = (
+        ButtonStyle.DANGER
+        if notifications_enabled
+        else ButtonStyle.SUCCESS
+    )
 
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text=NEW_LEADS_BUTTON),
-                KeyboardButton(text=ACTIVE_LEADS_BUTTON),
+                KeyboardButton(
+                    text=NEW_LEADS_BUTTON,
+                    style=ButtonStyle.PRIMARY,
+                ),
+                KeyboardButton(
+                    text=ACTIVE_LEADS_BUTTON,
+                    style=ButtonStyle.PRIMARY,
+                ),
+            ],
+            [
+                KeyboardButton(
+                    text=ARCHIVE_BUTTON,
+                    style=ButtonStyle.PRIMARY,
+                ),
             ],
             [
                 KeyboardButton(
                     text=REFRESH_PANEL_BUTTON,
+                    style=ButtonStyle.PRIMARY,
                 ),
             ],
             [
                 KeyboardButton(
                     text=notification_button,
+                    style=notification_style,
                 ),
             ],
             [
                 KeyboardButton(
                     text=USER_MODE_BUTTON,
+                    style=ButtonStyle.PRIMARY,
                 ),
-            ],
-            [
-                KeyboardButton(text=NEW_LEADS_BUTTON),
-                KeyboardButton(text=ACTIVE_LEADS_BUTTON),
-            ],
-            [
-                KeyboardButton(text=ARCHIVE_BUTTON),
             ],
         ],
         resize_keyboard=True,
@@ -102,6 +119,7 @@ def get_lead_list_keyboard(
                 list_type=list_type,
                 page=page,
             ),
+            style=ButtonStyle.PRIMARY,
         )
 
     builder.adjust(1)
@@ -116,6 +134,7 @@ def get_lead_list_keyboard(
                     list_type=list_type,
                     page=page - 1,
                 ).pack(),
+                style=ButtonStyle.PRIMARY,
             )
         )
 
@@ -127,6 +146,7 @@ def get_lead_list_keyboard(
                     list_type=list_type,
                     page=page + 1,
                 ).pack(),
+                style=ButtonStyle.PRIMARY,
             )
         )
 
@@ -150,7 +170,7 @@ def get_lead_card_keyboard(
     if lead.status == LeadStatus.NEW:
         builder.row(
             InlineKeyboardButton(
-                text="Взять в работу",
+                text="▶️ Взять в работу",
                 callback_data=LeadStatusCallback(
                     lead_id=lead.id,
                     target_status=(
@@ -159,6 +179,20 @@ def get_lead_card_keyboard(
                     list_type=list_type,
                     page=page,
                 ).pack(),
+                style=ButtonStyle.SUCCESS,
+            )
+        )
+
+    if lead.status == LeadStatus.CLOSED:
+        builder.row(
+            InlineKeyboardButton(
+                text=REOPEN_LEAD_BUTTON,
+                callback_data=LeadReopenCallback(
+                    lead_id=lead.id,
+                    list_type=list_type,
+                    page=page,
+                ).pack(),
+                style=ButtonStyle.SUCCESS,
             )
         )
 
@@ -171,20 +205,22 @@ def get_lead_card_keyboard(
 
     if lead.status != LeadStatus.CLOSED:
         builder.row(
-        InlineKeyboardButton(
-            text=CLOSE_LEAD_BUTTON,
-            callback_data=LeadCloseCallback(
-                lead_id=lead.id,
-                list_type=list_type,
-                page=page,
-            ).pack(),
+            InlineKeyboardButton(
+                text=CLOSE_LEAD_BUTTON,
+                callback_data=LeadCloseCallback(
+                    lead_id=lead.id,
+                    list_type=list_type,
+                    page=page,
+                ).pack(),
+                style=ButtonStyle.DANGER,
+            )
         )
-    )
 
     builder.row(
         InlineKeyboardButton(
-            text="Связаться с клиентом",
+            text="💬 Связаться с клиентом",
             url=profile_url,
+            style=ButtonStyle.PRIMARY,
         )
     )
 
@@ -195,10 +231,12 @@ def get_lead_card_keyboard(
                 list_type=list_type,
                 page=page,
             ).pack(),
+            style=ButtonStyle.PRIMARY,
         )
     )
 
     return builder.as_markup()
+
 
 def get_close_comment_keyboard() -> ReplyKeyboardMarkup:
     """Return a keyboard for cancelling lead closure."""
@@ -208,6 +246,7 @@ def get_close_comment_keyboard() -> ReplyKeyboardMarkup:
             [
                 KeyboardButton(
                     text=CANCEL_CLOSE_BUTTON,
+                    style=ButtonStyle.DANGER,
                 )
             ]
         ],
@@ -227,7 +266,7 @@ def get_close_confirmation_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Подтвердить закрытие",
+                    text="✅ Подтвердить закрытие",
                     callback_data=(
                         LeadCloseDecisionCallback(
                             action="confirm",
@@ -236,6 +275,7 @@ def get_close_confirmation_keyboard(
                             page=page,
                         ).pack()
                     ),
+                    style=ButtonStyle.DANGER,
                 )
             ],
             [
@@ -249,6 +289,7 @@ def get_close_confirmation_keyboard(
                             page=page,
                         ).pack()
                     ),
+                    style=ButtonStyle.PRIMARY,
                 )
             ],
         ]

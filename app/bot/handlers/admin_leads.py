@@ -1,14 +1,18 @@
+import logging
 from html import escape
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.bot.callbacks import (
     LeadOpenCallback,
     LeadPageCallback,
+    LeadReopenCallback,
+    LeadStatusCallback,
 )
 from app.bot.filters import IsAdmin
-
 from app.bot.keyboards.admin import (
     ACTIVE_LEADS_BUTTON,
     ARCHIVE_BUTTON,
@@ -16,33 +20,21 @@ from app.bot.keyboards.admin import (
     get_lead_card_keyboard,
     get_lead_list_keyboard,
 )
-
 from app.database.enums import LeadStatus
 from app.database.models.lead import Lead
-from app.database.repositories import lead
-from app.database.repositories import lead
 from app.services.admin_lead_service import (
     LeadListType,
     LeadPage,
     get_admin_lead,
     get_lead_page,
-)
-
-from app.bot.callbacks import (
-    LeadOpenCallback,
-    LeadPageCallback,
-    LeadStatusCallback,
-)
-
-from app.services.admin_lead_service import (
-    LeadListType,
-    LeadPage,
-    get_admin_lead,
-    get_lead_page,
+    record_reopen_notification_delivery,
+    reopen_closed_lead,
     take_lead_in_progress,
 )
 
+
 router = Router(name=__name__)
+logger = logging.getLogger(__name__)
 
 
 STATUS_LABELS = {
@@ -222,6 +214,20 @@ async def handle_active_leads(message: Message) -> None:
     )
 
 
+@router.message(
+    IsAdmin(),
+    F.text == ARCHIVE_BUTTON,
+)
+async def handle_archive(message: Message) -> None:
+    """Show closed project requests."""
+
+    await send_lead_page(
+        message,
+        list_type=LeadListType.ARCHIVE,
+        page_number=1,
+    )
+
+
 @router.callback_query(
     IsAdmin(),
     LeadPageCallback.filter(),
@@ -285,6 +291,7 @@ async def handle_open_lead(
 
     await callback.answer()
 
+
 @router.callback_query(
     IsAdmin(),
     LeadStatusCallback.filter(
@@ -298,15 +305,13 @@ async def handle_take_lead_in_progress(
 ) -> None:
     """Move a new lead into active work."""
 
-    user = callback.from_user
-
     if not isinstance(callback.message, Message):
         await callback.answer()
         return
 
     result = await take_lead_in_progress(
         lead_id=callback_data.lead_id,
-        admin_telegram_id=user.id,
+        admin_telegram_id=callback.from_user.id,
     )
 
     if not result.found:
@@ -317,11 +322,9 @@ async def handle_take_lead_in_progress(
         return
 
     if not result.changed:
-        status_label = (
-            STATUS_LABELS.get(
-                result.current_status,
-                "неизвестный статус",
-            )
+        status_label = STATUS_LABELS.get(
+            result.current_status,
+            "неизвестный статус",
         )
 
         await callback.answer(
@@ -356,15 +359,135 @@ async def handle_take_lead_in_progress(
         "Заявка взята в работу."
     )
 
-@router.message(
-    IsAdmin(),
-    F.text == ARCHIVE_BUTTON,
-)
-async def handle_archive(message: Message) -> None:
-    """Show closed project requests."""
 
-    await send_lead_page(
-        message,
-        list_type=LeadListType.ARCHIVE,
-        page_number=1,
+@router.callback_query(
+    IsAdmin(),
+    LeadReopenCallback.filter(),
+)
+async def handle_reopen_lead(
+    callback: CallbackQuery,
+    callback_data: LeadReopenCallback,
+) -> None:
+    """Return a closed lead to active work."""
+
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    try:
+        result = await reopen_closed_lead(
+            lead_id=callback_data.lead_id,
+            admin_telegram_id=callback.from_user.id,
+        )
+    except SQLAlchemyError:
+        logger.exception(
+            "Failed to reopen lead %s",
+            callback_data.lead_id,
+        )
+
+        await callback.answer(
+            "Не удалось вернуть заявку в работу.",
+            show_alert=True,
+        )
+        return
+
+    if not result.found:
+        await callback.answer(
+            "Заявка не найдена.",
+            show_alert=True,
+        )
+        return
+
+    if not result.changed:
+        status_label = STATUS_LABELS.get(
+            result.current_status,
+            "неизвестный статус",
+        )
+
+        await callback.answer(
+            f"Заявка уже имеет статус: {status_label}.",
+            show_alert=True,
+        )
+        return
+
+    delivered = False
+    delivery_error: str | None = None
+
+    if (
+        result.client_telegram_id is not None
+        and result.lead_id is not None
+    ):
+        try:
+            await callback.bot.send_message(
+                chat_id=result.client_telegram_id,
+                text=(
+                    f"Заявка №{result.lead_id} снова "
+                    "передана в работу.\n\n"
+                    "Panini продолжит работу "
+                    "с вашим обращением."
+                ),
+            )
+            delivered = True
+        except TelegramAPIError as error:
+            delivery_error = str(error)
+
+            logger.exception(
+                "Lead %s reopened, but client notification failed",
+                result.lead_id,
+            )
+
+        try:
+            await record_reopen_notification_delivery(
+                lead_id=result.lead_id,
+                recipient_telegram_id=(
+                    result.client_telegram_id
+                ),
+                delivered=delivered,
+                error_message=delivery_error,
+            )
+        except SQLAlchemyError:
+            logger.exception(
+                "Failed to record reopening notification "
+                "for lead %s",
+                result.lead_id,
+            )
+
+    try:
+        lead = await get_admin_lead(
+            callback_data.lead_id
+        )
+    except SQLAlchemyError:
+        logger.exception(
+            "Failed to reload reopened lead %s",
+            callback_data.lead_id,
+        )
+        lead = None
+
+    if lead is None:
+        await callback.answer(
+            "Заявка возвращена в работу, "
+            "но карточку обновить не удалось.",
+            show_alert=True,
+        )
+        return
+
+    await callback.message.edit_text(
+        build_lead_card_text(lead),
+        parse_mode="HTML",
+        reply_markup=get_lead_card_keyboard(
+            lead=lead,
+            list_type=LeadListType.ACTIVE.value,
+            page=1,
+        ),
     )
+
+    if delivered:
+        await callback.answer(
+            "Заявка возвращена в работу."
+        )
+    else:
+        await callback.answer(
+            "Заявка возвращена в работу, "
+            "но клиент не уведомлён.",
+            show_alert=True,
+        )

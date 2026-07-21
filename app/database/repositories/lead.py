@@ -235,6 +235,51 @@ class LeadRepository:
 
         return lead, True, admin_comment
 
+    async def reopen(
+        self,
+        *,
+        lead_id: int,
+        admin_telegram_id: int,
+    ) -> tuple[Lead | None, bool]:
+        """Return a closed lead to active work."""
+
+        statement = (
+            select(Lead)
+            .options(selectinload(Lead.user))
+            .where(Lead.id == lead_id)
+            .with_for_update()
+        )
+
+        lead = await self._session.scalar(statement)
+
+        if lead is None:
+            return None, False
+
+        if lead.status != LeadStatus.CLOSED:
+            return lead, False
+
+        old_status = lead.status
+
+        lead.status = LeadStatus.IN_PROGRESS
+        lead.close_comment = None
+        lead.closed_at = None
+
+        history = LeadStatusHistory(
+            lead_id=lead.id,
+            old_status=old_status,
+            new_status=LeadStatus.IN_PROGRESS,
+            admin_telegram_id=admin_telegram_id,
+            comment=(
+                "Закрытая заявка возвращена "
+                "администратором в работу"
+            ),
+        )
+
+        self._session.add(history)
+        await self._session.flush()
+
+        return lead, True
+
     async def mark_admin_comment_delivery(
         self,
         *,

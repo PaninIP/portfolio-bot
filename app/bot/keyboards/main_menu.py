@@ -1,11 +1,13 @@
+from aiogram.enums import ButtonStyle
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+
 from app.bot.keyboards.admin import ADMIN_PANEL_BUTTON
 
-ABOUT_BUTTON = "Обо мне"
-SERVICES_BUTTON = "Услуги"
-PORTFOLIO_BUTTON = "Примеры работ"
-DISCUSS_PROJECT_BUTTON = "Обсудить проект"
 
+ABOUT_BUTTON = "👤 Обо мне"
+SERVICES_BUTTON = "🛠 Услуги"
+PORTFOLIO_BUTTON = "📁 Примеры работ"
+DISCUSS_PROJECT_BUTTON = "📝 Обсудить проект"
 
 
 def get_main_menu_keyboard(
@@ -16,14 +18,26 @@ def get_main_menu_keyboard(
 
     keyboard = [
         [
-            KeyboardButton(text=ABOUT_BUTTON),
-            KeyboardButton(text=SERVICES_BUTTON),
+            KeyboardButton(
+                text=ABOUT_BUTTON,
+                style=ButtonStyle.PRIMARY,
+            ),
+            KeyboardButton(
+                text=SERVICES_BUTTON,
+                style=ButtonStyle.PRIMARY,
+            ),
         ],
         [
-            KeyboardButton(text=PORTFOLIO_BUTTON),
+            KeyboardButton(
+                text=PORTFOLIO_BUTTON,
+                style=ButtonStyle.PRIMARY,
+            ),
         ],
         [
-            KeyboardButton(text=DISCUSS_PROJECT_BUTTON),
+            KeyboardButton(
+                text=DISCUSS_PROJECT_BUTTON,
+                style=ButtonStyle.SUCCESS,
+            ),
         ],
     ]
 
@@ -32,6 +46,7 @@ def get_main_menu_keyboard(
             [
                 KeyboardButton(
                     text=ADMIN_PANEL_BUTTON,
+                    style=ButtonStyle.PRIMARY,
                 )
             ]
         )
