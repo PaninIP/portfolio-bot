@@ -18,8 +18,12 @@ from app.services.lead_notification import send_lead_to_admin
 
 from app.services.admin_service import (
     admin_notifications_enabled,
+    is_configured_admin,
 )
 
+from app.bot.filters import IsAdmin
+from app.bot.views.admin_panel import show_admin_panel
+from app.bot.keyboards.admin import ADMIN_PANEL_BUTTON
 from app.bot.keyboards.lead_form import (
     CANCEL_BUTTON,
     CONFIRM_BUTTON,
@@ -43,6 +47,17 @@ from app.bot.states.lead_form import LeadForm
 router = Router(name=__name__)
 
 logger = logging.getLogger(__name__)
+
+
+def should_show_admin_panel(message: Message) -> bool:
+    """Return whether the administrator shortcut should be shown."""
+
+    user = message.from_user
+
+    return bool(
+        user
+        and is_configured_admin(user.id)
+    )
 
 
 def get_message_text(message: Message) -> str | None:
@@ -131,9 +146,11 @@ async def ask_for_contact(
     await state.set_state(LeadForm.contact)
 
     await message.answer(
-        "Передайте контакт Telegram, чтобы Иван мог связаться с вами.\n\n"
+        "Передайте контакт Telegram, чтобы Panini мог связаться с вами.\n\n"
         "Telegram запросит подтверждение перед отправкой номера.",
-        reply_markup=get_contact_keyboard(),
+        reply_markup=get_contact_keyboard(
+            show_admin_panel=should_show_admin_panel(message),
+        ),
     )
 
 
@@ -155,7 +172,9 @@ async def start_lead_form(
         f"В вашем Telegram-профиле указано имя: "
         f"{profile_name}\n\n"
         "Использовать его для обращения или указать другое?",
-        reply_markup=get_name_choice_keyboard(),
+        reply_markup=get_name_choice_keyboard(
+            show_admin_panel=should_show_admin_panel(message),
+        ),
     )
 
 
@@ -172,8 +191,24 @@ async def show_confirmation(
     await message.answer(
         build_lead_summary(data),
         parse_mode="HTML",
-        reply_markup=get_confirmation_keyboard(),
+        reply_markup=get_confirmation_keyboard(
+            show_admin_panel=should_show_admin_panel(message),
+        ),
     )
+
+
+@router.message(
+    IsAdmin(),
+    F.text == ADMIN_PANEL_BUTTON,
+)
+async def handle_admin_panel_from_form(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    """Leave the lead form and open the administrator panel."""
+
+    await state.clear()
+    await show_admin_panel(message)
 
 
 @router.message(F.text == DISCUSS_PROJECT_BUTTON)
@@ -198,7 +233,9 @@ async def handle_cancel(
     if current_state is None:
         await message.answer(
             "Сейчас нет активной заявки.",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_main_menu_keyboard(
+                show_admin_panel=should_show_admin_panel(message),
+            ),
         )
         return
 
@@ -206,7 +243,9 @@ async def handle_cancel(
 
     await message.answer(
         "Заполнение заявки отменено.",
-        reply_markup=get_main_menu_keyboard(),
+        reply_markup=get_main_menu_keyboard(
+            show_admin_panel=should_show_admin_panel(message),
+        ),
     )
 
 
@@ -248,7 +287,9 @@ async def handle_custom_name_choice(
 
     await message.answer(
         "Введите имя, которое следует использовать для обращения.",
-        reply_markup=get_cancel_keyboard(),
+        reply_markup=get_cancel_keyboard(
+            show_admin_panel=should_show_admin_panel(message),
+        ),
     )
 
 
@@ -321,7 +362,9 @@ async def handle_contact(
         "Контакт сохранён.\n\n"
         "Опишите проект: для чего нужен бот "
         "и какую задачу он должен решать?",
-        reply_markup=get_cancel_keyboard(),
+        reply_markup=get_cancel_keyboard(
+            show_admin_panel=should_show_admin_panel(message),
+        ),
     )
 
 
@@ -433,7 +476,9 @@ async def handle_budget(
     await message.answer(
         "Добавьте комментарий или важные детали.\n\n"
         "Этот шаг можно пропустить.",
-        reply_markup=get_comment_keyboard(),
+        reply_markup=get_comment_keyboard(
+            show_admin_panel=should_show_admin_panel(message),
+        ),
     )
 
 
@@ -509,7 +554,9 @@ async def handle_confirmation(
             "Не удалось сохранить заявку.\n\n"
             "Попробуйте подтвердить её повторно. "
             "Если ошибка сохранится, заполните заявку заново.",
-            reply_markup=get_confirmation_keyboard(),
+            reply_markup=get_confirmation_keyboard(
+                show_admin_panel=should_show_admin_panel(message),
+            ),
         )
         return
 
@@ -552,9 +599,11 @@ async def handle_confirmation(
 
     await message.answer(
         f"Заявка №{lead_id} принята и сохранена.\n\n"
-        "Иван свяжется с вами для уточнения деталей "
+        "Panini свяжется с вами для уточнения деталей "
         "и согласования дальнейшей работы.",
-        reply_markup=get_main_menu_keyboard(),
+        reply_markup=get_main_menu_keyboard(
+            show_admin_panel=should_show_admin_panel(message),
+        ),
     )
 
 
