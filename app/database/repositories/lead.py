@@ -14,6 +14,20 @@ from app.database.models.lead import (
 from app.database.models.user import User
 
 
+ClientSummaryRecord = tuple[
+    int,
+    int,
+    str | None,
+    str,
+    str | None,
+    str | None,
+    int,
+    int,
+    int,
+    datetime,
+]
+
+
 class LeadRepository:
     """Provide database operations for project requests."""
 
@@ -240,6 +254,156 @@ class LeadRepository:
                 Lead.created_at >= date_from,
                 Lead.created_at < date_to,
             )
+            .order_by(
+                Lead.created_at.desc(),
+                Lead.id.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+
+        result = await self._session.scalars(statement)
+
+        return list(result.all())
+
+    async def count_clients_with_leads(self) -> int:
+        """Count distinct Telegram users who submitted requests."""
+
+        statement = select(
+            func.count(func.distinct(Lead.user_id))
+        )
+
+        count = await self._session.scalar(statement)
+
+        return int(count or 0)
+
+    def _client_summary_statement(self):
+        """Build the aggregate client-directory statement."""
+
+        total_leads = func.count(Lead.id)
+        open_leads = func.count(Lead.id).filter(
+            Lead.status != LeadStatus.CLOSED
+        )
+        closed_leads = func.count(Lead.id).filter(
+            Lead.status == LeadStatus.CLOSED
+        )
+        last_lead_at = func.max(Lead.created_at)
+
+        return (
+            select(
+                User.id,
+                User.telegram_user_id,
+                User.username,
+                User.first_name,
+                User.last_name,
+                User.phone,
+                total_leads.label("total_leads"),
+                open_leads.label("open_leads"),
+                closed_leads.label("closed_leads"),
+                last_lead_at.label("last_lead_at"),
+            )
+            .join(Lead, Lead.user_id == User.id)
+            .group_by(
+                User.id,
+                User.telegram_user_id,
+                User.username,
+                User.first_name,
+                User.last_name,
+                User.phone,
+            )
+        )
+
+    async def list_client_summaries(
+        self,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[ClientSummaryRecord]:
+        """Return aggregated clients ordered by latest request."""
+
+        statement = (
+            self._client_summary_statement()
+            .order_by(
+                func.max(Lead.created_at).desc(),
+                User.id.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+
+        result = await self._session.execute(statement)
+
+        return [
+            (
+                int(row.id),
+                int(row.telegram_user_id),
+                row.username,
+                row.first_name,
+                row.last_name,
+                row.phone,
+                int(row.total_leads),
+                int(row.open_leads),
+                int(row.closed_leads),
+                row.last_lead_at,
+            )
+            for row in result.all()
+        ]
+
+    async def get_client_summary(
+        self,
+        client_id: int,
+    ) -> ClientSummaryRecord | None:
+        """Return aggregate data for one client."""
+
+        statement = self._client_summary_statement().where(
+            User.id == client_id
+        )
+
+        row = (await self._session.execute(statement)).one_or_none()
+
+        if row is None:
+            return None
+
+        return (
+            int(row.id),
+            int(row.telegram_user_id),
+            row.username,
+            row.first_name,
+            row.last_name,
+            row.phone,
+            int(row.total_leads),
+            int(row.open_leads),
+            int(row.closed_leads),
+            row.last_lead_at,
+        )
+
+    async def count_client_leads(
+        self,
+        client_id: int,
+    ) -> int:
+        """Count all requests submitted by one client."""
+
+        statement = select(func.count(Lead.id)).where(
+            Lead.user_id == client_id
+        )
+
+        count = await self._session.scalar(statement)
+
+        return int(count or 0)
+
+    async def list_client_leads(
+        self,
+        client_id: int,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[Lead]:
+        """Return one page of requests submitted by a client."""
+
+        statement = (
+            select(Lead)
+            .options(selectinload(Lead.user))
+            .where(Lead.user_id == client_id)
             .order_by(
                 Lead.created_at.desc(),
                 Lead.id.desc(),

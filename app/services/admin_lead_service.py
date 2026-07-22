@@ -57,6 +57,59 @@ class LeadResultPage:
 
 
 @dataclass(frozen=True, slots=True)
+class ClientSummary:
+    """Aggregate administrator data for one Telegram client."""
+
+    client_id: int
+    telegram_user_id: int
+    username: str | None
+    first_name: str
+    last_name: str | None
+    phone: str | None
+    total_leads: int
+    open_leads: int
+    closed_leads: int
+    last_lead_at: datetime
+
+    @property
+    def display_name(self) -> str:
+        """Return the client's Telegram profile name."""
+
+        return (
+            " ".join(
+                part
+                for part in (
+                    self.first_name,
+                    self.last_name,
+                )
+                if part
+            ).strip()
+            or "Пользователь Telegram"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ClientPage:
+    """One page of the administrator client directory."""
+
+    items: tuple[ClientSummary, ...]
+    page: int
+    total_pages: int
+    total_items: int
+
+
+@dataclass(frozen=True, slots=True)
+class ClientLeadPage:
+    """One page of requests submitted by a single client."""
+
+    items: tuple[Lead, ...]
+    client_id: int
+    page: int
+    total_pages: int
+    total_items: int
+
+
+@dataclass(frozen=True, slots=True)
 class LeadStatusChangeResult:
     """Result of an administrator status-change operation."""
 
@@ -255,6 +308,121 @@ async def get_date_result_page(
     return LeadResultPage(
         items=tuple(leads),
         mode=LeadResultMode.DATE,
+        page=normalized_page,
+        total_pages=total_pages,
+        total_items=total_items,
+    )
+
+
+def _build_client_summary(
+    record: tuple[
+        int,
+        int,
+        str | None,
+        str,
+        str | None,
+        str | None,
+        int,
+        int,
+        int,
+        datetime,
+    ],
+) -> ClientSummary:
+    """Convert a repository aggregate row to a service DTO."""
+
+    return ClientSummary(
+        client_id=record[0],
+        telegram_user_id=record[1],
+        username=record[2],
+        first_name=record[3],
+        last_name=record[4],
+        phone=record[5],
+        total_leads=record[6],
+        open_leads=record[7],
+        closed_leads=record[8],
+        last_lead_at=record[9],
+    )
+
+
+async def get_client_page(
+    *,
+    page: int,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> ClientPage:
+    """Return one page of clients who submitted requests."""
+
+    async with async_session_factory() as session:
+        repository = LeadRepository(session)
+
+        total_items = await repository.count_clients_with_leads()
+        normalized_page, total_pages = _normalize_page(
+            requested_page=page,
+            total_items=total_items,
+            page_size=page_size,
+        )
+
+        records = await repository.list_client_summaries(
+            limit=page_size,
+            offset=(normalized_page - 1) * page_size,
+        )
+
+    return ClientPage(
+        items=tuple(
+            _build_client_summary(record)
+            for record in records
+        ),
+        page=normalized_page,
+        total_pages=total_pages,
+        total_items=total_items,
+    )
+
+
+async def get_client_summary(
+    client_id: int,
+) -> ClientSummary | None:
+    """Return aggregate administrator data for one client."""
+
+    async with async_session_factory() as session:
+        repository = LeadRepository(session)
+        record = await repository.get_client_summary(
+            client_id
+        )
+
+    if record is None:
+        return None
+
+    return _build_client_summary(record)
+
+
+async def get_client_lead_page(
+    *,
+    client_id: int,
+    page: int,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> ClientLeadPage:
+    """Return one page of requests submitted by a client."""
+
+    async with async_session_factory() as session:
+        repository = LeadRepository(session)
+
+        total_items = await repository.count_client_leads(
+            client_id
+        )
+        normalized_page, total_pages = _normalize_page(
+            requested_page=page,
+            total_items=total_items,
+            page_size=page_size,
+        )
+
+        leads = await repository.list_client_leads(
+            client_id,
+            limit=page_size,
+            offset=(normalized_page - 1) * page_size,
+        )
+
+    return ClientLeadPage(
+        items=tuple(leads),
+        client_id=client_id,
         page=normalized_page,
         total_pages=total_pages,
         total_items=total_items,
