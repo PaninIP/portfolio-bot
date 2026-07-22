@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.bot.callbacks import (
+    AdminInputCancelCallback,
     LeadDatePresetCallback,
     LeadResultOpenCallback,
     LeadResultPageCallback,
@@ -18,6 +19,7 @@ from app.bot.handlers.admin_leads import build_lead_card_text
 from app.bot.keyboards.admin import (
     DATE_FILTER_BUTTON,
     SEARCH_LEADS_BUTTON,
+    get_admin_input_cancel_keyboard,
     get_date_filter_keyboard,
     get_lead_card_keyboard,
     get_lead_result_keyboard,
@@ -26,6 +28,7 @@ from app.bot.states.admin import (
     LeadDateFilterForm,
     LeadSearchForm,
 )
+from app.bot.views.admin_panel import show_admin_panel
 from app.services.admin_lead_service import (
     LeadResultMode,
     LeadResultPage,
@@ -214,6 +217,31 @@ async def send_result_page(
     return True
 
 
+@router.callback_query(
+    IsAdmin(),
+    AdminInputCancelCallback.filter(),
+)
+async def handle_cancel_admin_input(
+    callback: CallbackQuery,
+    callback_data: AdminInputCancelCallback,
+    state: FSMContext,
+) -> None:
+    """Cancel search or custom-period input and restore the panel."""
+
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    await state.clear()
+
+    await callback.message.answer(
+        "Ввод отменён."
+    )
+    await show_admin_panel(callback.message)
+
+    await callback.answer()
+
+
 @router.message(
     IsAdmin(),
     F.text == SEARCH_LEADS_BUTTON,
@@ -234,7 +262,10 @@ async def handle_start_search(
         "• @username;\n"
         "• Telegram ID;\n"
         "• телефон.\n\n"
-        "Для отмены откройте другой раздел админ-панели."
+        "Нажмите кнопку ниже, чтобы отменить ввод.",
+        reply_markup=get_admin_input_cancel_keyboard(
+            action="search",
+        ),
     )
 
 
@@ -317,7 +348,10 @@ async def handle_date_preset(
 
         await callback.message.answer(
             "Введите период в формате:\n"
-            "01.07.2026-31.07.2026"
+            "01.07.2026-31.07.2026",
+            reply_markup=get_admin_input_cancel_keyboard(
+                action="date",
+            ),
         )
         await callback.answer()
         return

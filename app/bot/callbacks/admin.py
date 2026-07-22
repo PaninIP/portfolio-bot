@@ -96,3 +96,53 @@ class LeadResultOpenCallback(
     mode: str
     lead_id: int
     page: int
+
+
+class AdminInputCancelCallback(
+    CallbackData,
+    prefix="admin_input_cancel",
+):
+    """Callback for cancelling an administrator text-input flow."""
+
+    action: str
+
+
+class ClientPageCallback(
+    CallbackData,
+    prefix="cl_page",
+):
+    """Callback for navigating client-directory pages."""
+
+    page: int
+
+
+class ClientOpenCallback(
+    CallbackData,
+    prefix="cl_open",
+):
+    """Callback for opening a client card."""
+
+    client_id: int
+    page: int
+
+
+class ClientLeadPageCallback(
+    CallbackData,
+    prefix="cl_lead_page",
+):
+    """Callback for navigating one client's request pages."""
+
+    client_id: int
+    clients_page: int
+    page: int
+
+
+class ClientLeadOpenCallback(
+    CallbackData,
+    prefix="cl_lead_open",
+):
+    """Callback for opening a request from a client card."""
+
+    lead_id: int
+    clients_page: int
+    page: int
