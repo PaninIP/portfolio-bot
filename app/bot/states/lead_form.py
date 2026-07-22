@@ -12,4 +12,5 @@ class LeadForm(StatesGroup):
     deadline = State()
     budget = State()
     comment = State()
+    attachments = State()
     confirmation = State()

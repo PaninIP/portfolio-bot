@@ -12,6 +12,16 @@ class LeadStatus(StrEnum):
     CLOSED = "closed"
 
 
+class AttachmentType(StrEnum):
+    """Supported project-request attachment types."""
+
+    DOCUMENT = "document"
+    PHOTO = "photo"
+    VIDEO = "video"
+    AUDIO = "audio"
+    VOICE = "voice"
+
+
 class NotificationType(StrEnum):
     """Types of notifications sent by the bot."""
 
@@ -53,6 +63,13 @@ notification_type_enum = SqlEnum(
 delivery_status_enum = SqlEnum(
     DeliveryStatus,
     name="delivery_status",
+    values_callable=get_enum_values,
+    validate_strings=True,
+)
+
+attachment_type_enum = SqlEnum(
+    AttachmentType,
+    name="attachment_type",
     values_callable=get_enum_values,
     validate_strings=True,
 )

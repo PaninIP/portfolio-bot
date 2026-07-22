@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.bot.callbacks import (
+    LeadAttachmentsCallback,
     LeadOpenCallback,
     LeadPageCallback,
     LeadReopenCallback,
@@ -22,6 +23,9 @@ from app.bot.keyboards.admin import (
 )
 from app.database.enums import LeadStatus
 from app.database.models.lead import Lead
+from app.services.lead_notification import (
+    send_stored_lead_attachments,
+)
 from app.services.admin_lead_service import (
     LeadListType,
     LeadPage,
@@ -144,7 +148,8 @@ def build_lead_card_text(lead: Lead) -> str:
         f"<b>Бюджет:</b> "
         f"{safe(lead.budget)}\n\n"
         f"<b>Комментарий клиента:</b>\n"
-        f"{safe(lead.client_comment or 'не указан')}"
+        f"{safe(lead.client_comment or 'не указан')}\n\n"
+        f"<b>Вложения:</b> {len(lead.attachments)}"
         f"{closed_section}"
     )
 
@@ -290,6 +295,73 @@ async def handle_open_lead(
     )
 
     await callback.answer()
+
+
+@router.callback_query(
+    IsAdmin(),
+    LeadAttachmentsCallback.filter(),
+)
+async def handle_lead_attachments(
+    callback: CallbackQuery,
+    callback_data: LeadAttachmentsCallback,
+) -> None:
+    """Send every attachment stored for a lead."""
+
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    try:
+        lead = await get_admin_lead(
+            callback_data.lead_id
+        )
+    except SQLAlchemyError:
+        logger.exception(
+            "Failed to load attachments for lead %s",
+            callback_data.lead_id,
+        )
+
+        await callback.answer(
+            "Не удалось загрузить вложения.",
+            show_alert=True,
+        )
+        return
+
+    if lead is None:
+        await callback.answer(
+            "Заявка не найдена.",
+            show_alert=True,
+        )
+        return
+
+    if not lead.attachments:
+        await callback.answer(
+            "У этой заявки нет вложений.",
+            show_alert=True,
+        )
+        return
+
+    await callback.answer(
+        f"Отправляю вложения: {len(lead.attachments)}."
+    )
+
+    try:
+        await send_stored_lead_attachments(
+            bot=callback.bot,
+            chat_id=callback.from_user.id,
+            lead_id=lead.id,
+            attachments=lead.attachments,
+        )
+    except (TelegramAPIError, ValueError):
+        logger.exception(
+            "Failed to send attachments for lead %s",
+            lead.id,
+        )
+
+        await callback.message.answer(
+            "Не удалось отправить часть вложений. "
+            "Проверьте журнал бота."
+        )
 
 
 @router.callback_query(

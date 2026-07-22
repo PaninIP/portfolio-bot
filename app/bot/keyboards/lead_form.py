@@ -8,6 +8,8 @@ CANCEL_BUTTON = "❌ Отменить"
 SKIP_BUTTON = "⏭ Пропустить"
 CONFIRM_BUTTON = "✅ Подтвердить заявку"
 RESTART_BUTTON = "🔄 Заполнить заново"
+DONE_ATTACHMENTS_BUTTON = "✅ Готово"
+SKIP_ATTACHMENTS_BUTTON = "⏭ Без вложений"
 
 USE_PROFILE_NAME_BUTTON = "👤 Использовать имя из профиля"
 ENTER_CUSTOM_NAME_BUTTON = "✏️ Указать другое имя"
@@ -162,6 +164,45 @@ def get_comment_keyboard(
     return ReplyKeyboardMarkup(
         keyboard=keyboard,
         resize_keyboard=True,
+    )
+
+
+def get_attachments_keyboard(
+    *,
+    show_admin_panel: bool = False,
+) -> ReplyKeyboardMarkup:
+    """Return controls for collecting optional lead attachments."""
+
+    keyboard = [
+        [
+            KeyboardButton(
+                text=DONE_ATTACHMENTS_BUTTON,
+                style=ButtonStyle.SUCCESS,
+            )
+        ],
+        [
+            KeyboardButton(
+                text=SKIP_ATTACHMENTS_BUTTON,
+                style=ButtonStyle.PRIMARY,
+            )
+        ],
+        [
+            KeyboardButton(
+                text=CANCEL_BUTTON,
+                style=ButtonStyle.DANGER,
+            )
+        ],
+    ]
+
+    append_admin_button(
+        keyboard,
+        show_admin_panel=show_admin_panel,
+    )
+
+    return ReplyKeyboardMarkup(
+        keyboard=keyboard,
+        resize_keyboard=True,
+        input_field_placeholder="Отправьте материалы к проекту",
     )
 
 

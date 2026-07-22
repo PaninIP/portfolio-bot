@@ -14,6 +14,7 @@ from aiogram.types import Message
 from aiogram.exceptions import TelegramAPIError
 
 from app.config import get_settings
+from app.database.enums import AttachmentType
 from app.services.lead_notification import send_lead_to_admin
 
 from app.services.admin_service import (
@@ -27,10 +28,13 @@ from app.bot.keyboards.admin import ADMIN_PANEL_BUTTON
 from app.bot.keyboards.lead_form import (
     CANCEL_BUTTON,
     CONFIRM_BUTTON,
+    DONE_ATTACHMENTS_BUTTON,
     ENTER_CUSTOM_NAME_BUTTON,
     RESTART_BUTTON,
+    SKIP_ATTACHMENTS_BUTTON,
     SKIP_BUTTON,
     USE_PROFILE_NAME_BUTTON,
+    get_attachments_keyboard,
     get_cancel_keyboard,
     get_comment_keyboard,
     get_confirmation_keyboard,
@@ -47,6 +51,8 @@ from app.bot.states.lead_form import LeadForm
 router = Router(name=__name__)
 
 logger = logging.getLogger(__name__)
+
+MAX_ATTACHMENTS = 10
 
 
 def should_show_admin_panel(message: Message) -> bool:
@@ -97,6 +103,74 @@ def format_html(value: object) -> str:
     return escape(str(value))
 
 
+def get_attachment_data(
+    message: Message,
+) -> dict[str, Any] | None:
+    """Extract supported Telegram attachment metadata."""
+
+    caption = (message.caption or "").strip() or None
+
+    if message.document is not None:
+        file = message.document
+        attachment_type = AttachmentType.DOCUMENT
+        file_name = file.file_name
+        mime_type = file.mime_type
+    elif message.photo:
+        file = message.photo[-1]
+        attachment_type = AttachmentType.PHOTO
+        file_name = None
+        mime_type = "image/jpeg"
+    elif message.video is not None:
+        file = message.video
+        attachment_type = AttachmentType.VIDEO
+        file_name = file.file_name
+        mime_type = file.mime_type
+    elif message.audio is not None:
+        file = message.audio
+        attachment_type = AttachmentType.AUDIO
+        file_name = file.file_name
+        mime_type = file.mime_type
+    elif message.voice is not None:
+        file = message.voice
+        attachment_type = AttachmentType.VOICE
+        file_name = None
+        mime_type = file.mime_type
+    else:
+        return None
+
+    return {
+        "attachment_type": attachment_type.value,
+        "telegram_file_id": file.file_id,
+        "telegram_file_unique_id": file.file_unique_id,
+        "file_name": (file_name[:255] if file_name else None),
+        "mime_type": (mime_type[:255] if mime_type else None),
+        "file_size": file.file_size,
+        "caption": caption,
+    }
+
+
+def get_attachment_label(data: dict[str, Any]) -> str:
+    """Return a user-facing attachment label."""
+
+    file_name = data.get("file_name")
+
+    if file_name:
+        return str(file_name)
+
+    labels = {
+        AttachmentType.PHOTO.value: "фотография",
+        AttachmentType.VIDEO.value: "видео",
+        AttachmentType.AUDIO.value: "аудиофайл",
+        AttachmentType.VOICE.value: "голосовое сообщение",
+        AttachmentType.DOCUMENT.value: "документ",
+    }
+
+    return labels.get(
+        str(data.get("attachment_type")),
+        "вложение",
+    )
+
+
 def build_lead_summary(data: dict[str, Any]) -> str:
     """Build a readable project request summary."""
 
@@ -133,7 +207,9 @@ def build_lead_summary(data: dict[str, Any]) -> str:
         f"<b>Ориентировочный бюджет:</b> "
         f"{format_html(data.get('budget', 'не указан'))}\n\n"
         "<b>Комментарий:</b>\n"
-        f"{format_html(data.get('comment', 'не указан'))}"
+        f"{format_html(data.get('comment', 'не указан'))}\n\n"
+        f"<b>Вложения:</b> "
+        f"{len(data.get('attachments') or [])}"
     )
 
 
@@ -173,6 +249,31 @@ async def start_lead_form(
         f"{profile_name}\n\n"
         "Использовать его для обращения или указать другое?",
         reply_markup=get_name_choice_keyboard(
+            show_admin_panel=should_show_admin_panel(message),
+        ),
+    )
+
+
+async def ask_for_attachments(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    """Start the optional attachment-collection step."""
+
+    data = await state.get_data()
+
+    if "attachments" not in data:
+        await state.update_data(attachments=[])
+
+    await state.set_state(LeadForm.attachments)
+
+    await message.answer(
+        "📎 Прикрепите материалы к проекту.\n\n"
+        "Можно отправить документы, фотографии, видео, "
+        "аудио или голосовые сообщения — до 10 файлов.\n\n"
+        "Когда закончите, нажмите «Готово». "
+        "Если материалов нет — «Без вложений».",
+        reply_markup=get_attachments_keyboard(
             show_admin_panel=should_show_admin_panel(message),
         ),
     )
@@ -492,8 +593,11 @@ async def handle_skip_comment(
 ) -> None:
     """Skip the optional comment."""
 
-    await state.update_data(comment="Не указан")
-    await show_confirmation(message, state)
+    await state.update_data(
+        comment="Не указан",
+        attachments=[],
+    )
+    await ask_for_attachments(message, state)
 
 
 @router.message(LeadForm.comment)
@@ -512,8 +616,117 @@ async def handle_comment(
         )
         return
 
-    await state.update_data(comment=comment)
+    await state.update_data(
+        comment=comment,
+        attachments=[],
+    )
+    await ask_for_attachments(message, state)
+
+
+@router.message(
+    LeadForm.attachments,
+    F.text == DONE_ATTACHMENTS_BUTTON,
+)
+async def handle_attachments_done(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    """Finish attachment collection when at least one file exists."""
+
+    data = await state.get_data()
+    attachments = data.get("attachments") or []
+
+    if not attachments:
+        await message.answer(
+            "Вложения пока не добавлены. "
+            "Отправьте файл или нажмите «Без вложений»."
+        )
+        return
+
     await show_confirmation(message, state)
+
+
+@router.message(
+    LeadForm.attachments,
+    F.text == SKIP_ATTACHMENTS_BUTTON,
+)
+async def handle_skip_attachments(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    """Continue without attachments when none were collected."""
+
+    data = await state.get_data()
+    attachments = data.get("attachments") or []
+
+    if attachments:
+        await message.answer(
+            "Уже добавлены вложения. "
+            "Нажмите «Готово», чтобы сохранить их."
+        )
+        return
+
+    await state.update_data(attachments=[])
+    await show_confirmation(message, state)
+
+
+@router.message(
+    LeadForm.attachments,
+    F.document | F.photo | F.video | F.audio | F.voice,
+)
+async def handle_attachment(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    """Collect one supported Telegram attachment."""
+
+    attachment = get_attachment_data(message)
+
+    if attachment is None:
+        await message.answer(
+            "Этот тип вложения не поддерживается."
+        )
+        return
+
+    data = await state.get_data()
+    attachments = list(data.get("attachments") or [])
+
+    if len(attachments) >= MAX_ATTACHMENTS:
+        await message.answer(
+            "Достигнут лимит: 10 вложений. "
+            "Нажмите «Готово»."
+        )
+        return
+
+    unique_id = attachment["telegram_file_unique_id"]
+
+    if any(
+        item.get("telegram_file_unique_id") == unique_id
+        for item in attachments
+    ):
+        await message.answer(
+            "Этот файл уже добавлен."
+        )
+        return
+
+    attachments.append(attachment)
+    await state.update_data(attachments=attachments)
+
+    await message.answer(
+        f"Добавлено: {get_attachment_label(attachment)}.\n"
+        f"Вложений: {len(attachments)} из {MAX_ATTACHMENTS}."
+    )
+
+
+@router.message(LeadForm.attachments)
+async def handle_invalid_attachment(message: Message) -> None:
+    """Reject unsupported input during attachment collection."""
+
+    await message.answer(
+        "Отправьте документ, фотографию, видео, аудио "
+        "или голосовое сообщение.\n\n"
+        "Затем нажмите «Готово» или «Без вложений»."
+    )
 
 
 @router.message(

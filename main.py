@@ -3,6 +3,7 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramAPIError
+from aiogram.fsm.storage.memory import SimpleEventIsolation
 
 from app.bot.handlers import get_handlers_router
 from app.config import get_settings
@@ -58,7 +59,9 @@ async def main() -> None:
         token=settings.bot_token.get_secret_value(),
     )
 
-    dispatcher = Dispatcher()
+    dispatcher = Dispatcher(
+        events_isolation=SimpleEventIsolation(),
+    )
     dispatcher.include_router(get_handlers_router())
 
     try:
