@@ -13,6 +13,7 @@ from aiogram.types import (
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.callbacks import (
+    LeadAttachmentsCallback,
     AdminInputCancelCallback,
     ClientLeadOpenCallback,
     ClientLeadPageCallback,
@@ -546,6 +547,17 @@ def get_lead_card_keyboard(
                     page=page,
                 ).pack(),
                 style=ButtonStyle.SUCCESS,
+            )
+        )
+
+    if lead.attachments:
+        builder.row(
+            InlineKeyboardButton(
+                text=f"📎 Вложения · {len(lead.attachments)}",
+                callback_data=LeadAttachmentsCallback(
+                    lead_id=lead.id,
+                ).pack(),
+                style=ButtonStyle.PRIMARY,
             )
         )
 

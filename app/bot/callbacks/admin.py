@@ -68,6 +68,15 @@ class LeadReopenCallback(
     page: int
 
 
+class LeadAttachmentsCallback(
+    CallbackData,
+    prefix="lead_files",
+):
+    """Callback for sending one lead's stored attachments."""
+
+    lead_id: int
+
+
 class LeadDatePresetCallback(
     CallbackData,
     prefix="lead_date",

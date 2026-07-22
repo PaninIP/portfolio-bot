@@ -5,10 +5,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.enums import LeadStatus
+from app.database.enums import AttachmentType, LeadStatus
 from app.database.models.lead import (
     Lead,
     LeadAdminComment,
+    LeadAttachment,
     LeadStatusHistory,
 )
 from app.database.models.user import User
@@ -114,6 +115,36 @@ class LeadRepository:
         await self._session.flush()
 
         return lead
+
+    async def create_attachment(
+        self,
+        *,
+        lead_id: int,
+        attachment_type: AttachmentType,
+        telegram_file_id: str,
+        telegram_file_unique_id: str,
+        file_name: str | None,
+        mime_type: str | None,
+        file_size: int | None,
+        caption: str | None,
+    ) -> LeadAttachment:
+        """Attach Telegram file metadata to an existing lead."""
+
+        attachment = LeadAttachment(
+            lead_id=lead_id,
+            attachment_type=attachment_type,
+            telegram_file_id=telegram_file_id,
+            telegram_file_unique_id=telegram_file_unique_id,
+            file_name=file_name,
+            mime_type=mime_type,
+            file_size=file_size,
+            caption=caption,
+        )
+
+        self._session.add(attachment)
+        await self._session.flush()
+
+        return attachment
 
     async def get_status_counts(
         self,
@@ -424,7 +455,10 @@ class LeadRepository:
 
         statement = (
             select(Lead)
-            .options(selectinload(Lead.user))
+            .options(
+                selectinload(Lead.user),
+                selectinload(Lead.attachments),
+            )
             .where(Lead.id == lead_id)
         )
 
@@ -487,7 +521,10 @@ class LeadRepository:
 
         statement = (
             select(Lead)
-            .options(selectinload(Lead.user))
+            .options(
+                selectinload(Lead.user),
+                selectinload(Lead.attachments),
+            )
             .where(Lead.id == lead_id)
             .with_for_update()
         )
@@ -542,7 +579,10 @@ class LeadRepository:
 
         statement = (
             select(Lead)
-            .options(selectinload(Lead.user))
+            .options(
+                selectinload(Lead.user),
+                selectinload(Lead.attachments),
+            )
             .where(Lead.id == lead_id)
             .with_for_update()
         )

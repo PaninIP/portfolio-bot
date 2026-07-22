@@ -2,6 +2,7 @@ from app.database.models.admin import AdminSettings
 from app.database.models.lead import (
     Lead,
     LeadAdminComment,
+    LeadAttachment,
     LeadStatusHistory,
 )
 from app.database.models.notification import NotificationLog
@@ -12,6 +13,7 @@ __all__ = [
     "AdminSettings",
     "Lead",
     "LeadAdminComment",
+    "LeadAttachment",
     "LeadStatusHistory",
     "NotificationLog",
     "User",

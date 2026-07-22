@@ -1,7 +1,11 @@
+from collections.abc import Sequence
 from html import escape
 from typing import Any
 
 from aiogram import Bot
+
+from app.database.enums import AttachmentType
+from app.database.models.lead import LeadAttachment
 
 
 def build_client_profile_link(
@@ -52,6 +56,144 @@ def build_admin_notification(
     )
 
 
+def build_attachment_caption(
+    *,
+    lead_id: int,
+    position: int,
+    total: int,
+    original_caption: str | None,
+) -> str:
+    """Build a safe Telegram media caption."""
+
+    prefix = (
+        f"📎 Заявка №{lead_id} · "
+        f"вложение {position} из {total}"
+    )
+
+    if not original_caption:
+        return prefix
+
+    available = max(0, 1024 - len(prefix) - 2)
+    trimmed = original_caption[:available]
+
+    return f"{prefix}\n\n{trimmed}"
+
+
+async def send_attachment_by_file_id(
+    *,
+    bot: Bot,
+    chat_id: int,
+    attachment_type: AttachmentType,
+    file_id: str,
+    caption: str,
+) -> None:
+    """Send one stored Telegram file by its reusable file ID."""
+
+    if attachment_type == AttachmentType.DOCUMENT:
+        await bot.send_document(
+            chat_id=chat_id,
+            document=file_id,
+            caption=caption,
+        )
+        return
+
+    if attachment_type == AttachmentType.PHOTO:
+        await bot.send_photo(
+            chat_id=chat_id,
+            photo=file_id,
+            caption=caption,
+        )
+        return
+
+    if attachment_type == AttachmentType.VIDEO:
+        await bot.send_video(
+            chat_id=chat_id,
+            video=file_id,
+            caption=caption,
+        )
+        return
+
+    if attachment_type == AttachmentType.AUDIO:
+        await bot.send_audio(
+            chat_id=chat_id,
+            audio=file_id,
+            caption=caption,
+        )
+        return
+
+    if attachment_type == AttachmentType.VOICE:
+        await bot.send_voice(
+            chat_id=chat_id,
+            voice=file_id,
+            caption=caption,
+        )
+        return
+
+    raise ValueError(
+        f"Unsupported attachment type: {attachment_type}"
+    )
+
+
+async def send_submission_attachments(
+    *,
+    bot: Bot,
+    chat_id: int,
+    lead_id: int,
+    attachments: Sequence[dict[str, Any]],
+) -> None:
+    """Send attachments kept in FSM storage after lead creation."""
+
+    total = len(attachments)
+
+    for position, attachment in enumerate(
+        attachments,
+        start=1,
+    ):
+        await send_attachment_by_file_id(
+            bot=bot,
+            chat_id=chat_id,
+            attachment_type=AttachmentType(
+                attachment["attachment_type"]
+            ),
+            file_id=str(attachment["telegram_file_id"]),
+            caption=build_attachment_caption(
+                lead_id=lead_id,
+                position=position,
+                total=total,
+                original_caption=attachment.get("caption"),
+            ),
+        )
+
+
+async def send_stored_lead_attachments(
+    *,
+    bot: Bot,
+    chat_id: int,
+    lead_id: int,
+    attachments: Sequence[LeadAttachment],
+) -> None:
+    """Send attachments loaded from the database."""
+
+    total = len(attachments)
+
+    for position, attachment in enumerate(
+        attachments,
+        start=1,
+    ):
+        await send_attachment_by_file_id(
+            bot=bot,
+            chat_id=chat_id,
+            attachment_type=attachment.attachment_type,
+            file_id=attachment.telegram_file_id,
+            caption=build_attachment_caption(
+                lead_id=lead_id,
+                position=position,
+                total=total,
+                original_caption=attachment.caption,
+            ),
+        )
+
+
 async def send_lead_to_admin(
     *,
     bot: Bot,
@@ -74,6 +216,17 @@ async def send_lead_to_admin(
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
+
+    attachments = data.get("attachments") or []
+
+    if attachments:
+        await send_submission_attachments(
+            bot=bot,
+            chat_id=admin_chat_id,
+            lead_id=lead_id,
+            attachments=attachments,
+        )
+
 
 async def send_lead_closed_to_client(
     *,

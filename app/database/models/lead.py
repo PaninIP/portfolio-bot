@@ -16,7 +16,12 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
-from app.database.enums import LeadStatus, lead_status_enum
+from app.database.enums import (
+    AttachmentType,
+    LeadStatus,
+    attachment_type_enum,
+    lead_status_enum,
+)
 from app.database.mixins import CreatedAtMixin, TimestampMixin
 
 
@@ -121,6 +126,79 @@ class Lead(TimestampMixin, Base):
         back_populates="lead",
         cascade="all, delete-orphan",
         order_by="NotificationLog.created_at",
+    )
+
+    attachments: Mapped[list[LeadAttachment]] = relationship(
+        back_populates="lead",
+        cascade="all, delete-orphan",
+        order_by="LeadAttachment.created_at",
+    )
+
+
+class LeadAttachment(CreatedAtMixin, Base):
+    """Telegram file attached to a project request."""
+
+    __tablename__ = "lead_attachments"
+
+    __table_args__ = (
+        Index(
+            "ix_lead_attachments_lead_created_at",
+            "lead_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    lead_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "leads.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    attachment_type: Mapped[AttachmentType] = mapped_column(
+        attachment_type_enum,
+        nullable=False,
+    )
+
+    telegram_file_id: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+    )
+
+    telegram_file_unique_id: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+    )
+
+    file_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    mime_type: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    file_size: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    caption: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    lead: Mapped[Lead] = relationship(
+        back_populates="attachments",
     )
 
 
