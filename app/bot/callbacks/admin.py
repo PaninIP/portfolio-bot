@@ -66,3 +66,83 @@ class LeadReopenCallback(
     lead_id: int
     list_type: str
     page: int
+
+
+class LeadDatePresetCallback(
+    CallbackData,
+    prefix="lead_date",
+):
+    """Callback for selecting a predefined date period."""
+
+    preset: str
+
+
+class LeadResultPageCallback(
+    CallbackData,
+    prefix="lead_result_page",
+):
+    """Callback for navigating search or date-filter results."""
+
+    mode: str
+    page: int
+
+
+class LeadResultOpenCallback(
+    CallbackData,
+    prefix="lead_result_open",
+):
+    """Callback for opening a result without losing the result list."""
+
+    mode: str
+    lead_id: int
+    page: int
+
+
+class AdminInputCancelCallback(
+    CallbackData,
+    prefix="admin_input_cancel",
+):
+    """Callback for cancelling an administrator text-input flow."""
+
+    action: str
+
+
+class ClientPageCallback(
+    CallbackData,
+    prefix="cl_page",
+):
+    """Callback for navigating client-directory pages."""
+
+    page: int
+
+
+class ClientOpenCallback(
+    CallbackData,
+    prefix="cl_open",
+):
+    """Callback for opening a client card."""
+
+    client_id: int
+    page: int
+
+
+class ClientLeadPageCallback(
+    CallbackData,
+    prefix="cl_lead_page",
+):
+    """Callback for navigating one client's request pages."""
+
+    client_id: int
+    clients_page: int
+    page: int
+
+
+class ClientLeadOpenCallback(
+    CallbackData,
+    prefix="cl_lead_open",
+):
+    """Callback for opening a request from a client card."""
+
+    lead_id: int
+    clients_page: int
+    page: int
