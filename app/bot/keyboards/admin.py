@@ -14,9 +14,12 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.bot.callbacks import (
     LeadCloseCallback,
     LeadCloseDecisionCallback,
+    LeadDatePresetCallback,
     LeadOpenCallback,
     LeadPageCallback,
     LeadReopenCallback,
+    LeadResultOpenCallback,
+    LeadResultPageCallback,
     LeadStatusCallback,
 )
 from app.database.enums import LeadStatus
@@ -27,6 +30,8 @@ ADMIN_PANEL_BUTTON = "⚙️ Админ-панель"
 NEW_LEADS_BUTTON = "🆕 Новые заявки"
 ACTIVE_LEADS_BUTTON = "📂 Активные заявки"
 ARCHIVE_BUTTON = "🗄 Архив"
+SEARCH_LEADS_BUTTON = "🔎 Найти заявку"
+DATE_FILTER_BUTTON = "📅 Фильтр по датам"
 REFRESH_PANEL_BUTTON = "🔄 Обновить статистику"
 ENABLE_NOTIFICATIONS_BUTTON = "🔔 Включить уведомления"
 DISABLE_NOTIFICATIONS_BUTTON = "🔕 Отключить уведомления"
@@ -34,6 +39,14 @@ USER_MODE_BUTTON = "👤 Пользовательский режим"
 CLOSE_LEAD_BUTTON = "🔒 Закрыть заявку"
 REOPEN_LEAD_BUTTON = "♻️ Вернуть в работу"
 CANCEL_CLOSE_BUTTON = "↩️ Отменить закрытие"
+
+
+STATUS_ICONS = {
+    LeadStatus.NEW: "🆕",
+    LeadStatus.IN_PROGRESS: "▶️",
+    LeadStatus.WAITING_FOR_CLIENT: "⏳",
+    LeadStatus.CLOSED: "✅",
+}
 
 
 def get_admin_keyboard(
@@ -73,6 +86,16 @@ def get_admin_keyboard(
             ],
             [
                 KeyboardButton(
+                    text=SEARCH_LEADS_BUTTON,
+                    style=ButtonStyle.PRIMARY,
+                ),
+                KeyboardButton(
+                    text=DATE_FILTER_BUTTON,
+                    style=ButtonStyle.PRIMARY,
+                ),
+            ],
+            [
+                KeyboardButton(
                     text=REFRESH_PANEL_BUTTON,
                     style=ButtonStyle.PRIMARY,
                 ),
@@ -91,6 +114,7 @@ def get_admin_keyboard(
             ],
         ],
         resize_keyboard=True,
+        is_persistent=True,
         input_field_placeholder="Админ-панель",
     )
 
@@ -154,6 +178,109 @@ def get_lead_list_keyboard(
         builder.row(*navigation)
 
     return builder.as_markup()
+
+
+def get_lead_result_keyboard(
+    *,
+    leads: Sequence[Lead],
+    mode: str,
+    page: int,
+    total_pages: int,
+) -> InlineKeyboardMarkup:
+    """Return search or date-filter results with pagination."""
+
+    builder = InlineKeyboardBuilder()
+
+    for lead in leads:
+        title = lead.contact_name[:24]
+        status_icon = STATUS_ICONS.get(lead.status, "•")
+
+        builder.button(
+            text=(
+                f"{status_icon} №{lead.id} · {title} · "
+                f"{lead.created_at:%d.%m.%Y}"
+            ),
+            callback_data=LeadResultOpenCallback(
+                mode=mode,
+                lead_id=lead.id,
+                page=page,
+            ),
+            style=ButtonStyle.PRIMARY,
+        )
+
+    builder.adjust(1)
+
+    navigation: list[InlineKeyboardButton] = []
+
+    if page > 1:
+        navigation.append(
+            InlineKeyboardButton(
+                text="← Назад",
+                callback_data=LeadResultPageCallback(
+                    mode=mode,
+                    page=page - 1,
+                ).pack(),
+                style=ButtonStyle.PRIMARY,
+            )
+        )
+
+    if page < total_pages:
+        navigation.append(
+            InlineKeyboardButton(
+                text="Вперёд →",
+                callback_data=LeadResultPageCallback(
+                    mode=mode,
+                    page=page + 1,
+                ).pack(),
+                style=ButtonStyle.PRIMARY,
+            )
+        )
+
+    if navigation:
+        builder.row(*navigation)
+
+    return builder.as_markup()
+
+
+def get_date_filter_keyboard() -> InlineKeyboardMarkup:
+    """Return predefined and custom date-filter actions."""
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Сегодня",
+                    callback_data=LeadDatePresetCallback(
+                        preset="today"
+                    ).pack(),
+                    style=ButtonStyle.PRIMARY,
+                ),
+                InlineKeyboardButton(
+                    text="7 дней",
+                    callback_data=LeadDatePresetCallback(
+                        preset="7d"
+                    ).pack(),
+                    style=ButtonStyle.PRIMARY,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="30 дней",
+                    callback_data=LeadDatePresetCallback(
+                        preset="30d"
+                    ).pack(),
+                    style=ButtonStyle.PRIMARY,
+                ),
+                InlineKeyboardButton(
+                    text="Свой период",
+                    callback_data=LeadDatePresetCallback(
+                        preset="custom"
+                    ).pack(),
+                    style=ButtonStyle.PRIMARY,
+                ),
+            ],
+        ]
+    )
 
 
 def get_lead_card_keyboard(

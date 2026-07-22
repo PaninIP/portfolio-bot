@@ -66,3 +66,33 @@ class LeadReopenCallback(
     lead_id: int
     list_type: str
     page: int
+
+
+class LeadDatePresetCallback(
+    CallbackData,
+    prefix="lead_date",
+):
+    """Callback for selecting a predefined date period."""
+
+    preset: str
+
+
+class LeadResultPageCallback(
+    CallbackData,
+    prefix="lead_result_page",
+):
+    """Callback for navigating search or date-filter results."""
+
+    mode: str
+    page: int
+
+
+class LeadResultOpenCallback(
+    CallbackData,
+    prefix="lead_result_open",
+):
+    """Callback for opening a result without losing the result list."""
+
+    mode: str
+    lead_id: int
+    page: int
