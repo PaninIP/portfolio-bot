@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from enum import StrEnum
 from math import ceil
 
@@ -27,12 +27,30 @@ class LeadListType(StrEnum):
     ARCHIVE = "archive"
 
 
+class LeadResultMode(StrEnum):
+    """Available mixed-status result modes."""
+
+    SEARCH = "search"
+    DATE = "date"
+
+
 @dataclass(frozen=True, slots=True)
 class LeadPage:
     """One page of administrator lead results."""
 
     items: tuple[Lead, ...]
     list_type: LeadListType
+    page: int
+    total_pages: int
+    total_items: int
+
+
+@dataclass(frozen=True, slots=True)
+class LeadResultPage:
+    """One page of search or date-filter results."""
+
+    items: tuple[Lead, ...]
+    mode: LeadResultMode
     page: int
     total_pages: int
     total_items: int
@@ -75,6 +93,59 @@ def get_list_statuses(
     )
 
 
+def get_lead_list_type(status: LeadStatus) -> LeadListType:
+    """Return the standard administrator list for a status."""
+
+    if status == LeadStatus.NEW:
+        return LeadListType.NEW
+
+    if status == LeadStatus.CLOSED:
+        return LeadListType.ARCHIVE
+
+    return LeadListType.ACTIVE
+
+
+def _normalize_page(
+    *,
+    requested_page: int,
+    total_items: int,
+    page_size: int,
+) -> tuple[int, int]:
+    """Return normalized current page and total page count."""
+
+    total_pages = max(
+        1,
+        ceil(total_items / page_size),
+    )
+    normalized_page = min(
+        max(requested_page, 1),
+        total_pages,
+    )
+
+    return normalized_page, total_pages
+
+
+def get_utc_period(
+    *,
+    start_date: date,
+    end_date: date,
+) -> tuple[datetime, datetime]:
+    """Convert inclusive calendar dates into a UTC half-open period."""
+
+    start = datetime.combine(
+        start_date,
+        time.min,
+        tzinfo=timezone.utc,
+    )
+    end_exclusive = datetime.combine(
+        end_date + timedelta(days=1),
+        time.min,
+        tzinfo=timezone.utc,
+    )
+
+    return start, end_exclusive
+
+
 async def get_lead_page(
     *,
     list_type: LeadListType,
@@ -91,15 +162,10 @@ async def get_lead_page(
         total_items = await repository.count_by_statuses(
             statuses
         )
-
-        total_pages = max(
-            1,
-            ceil(total_items / page_size),
-        )
-
-        normalized_page = min(
-            max(page, 1),
-            total_pages,
+        normalized_page, total_pages = _normalize_page(
+            requested_page=page,
+            total_items=total_items,
+            page_size=page_size,
         )
 
         leads = await repository.list_by_statuses(
@@ -111,6 +177,84 @@ async def get_lead_page(
     return LeadPage(
         items=tuple(leads),
         list_type=list_type,
+        page=normalized_page,
+        total_pages=total_pages,
+        total_items=total_items,
+    )
+
+
+async def get_search_result_page(
+    *,
+    query: str,
+    page: int,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> LeadResultPage:
+    """Return one paginated general-search result page."""
+
+    async with async_session_factory() as session:
+        repository = LeadRepository(session)
+
+        total_items = await repository.count_search_results(
+            query
+        )
+        normalized_page, total_pages = _normalize_page(
+            requested_page=page,
+            total_items=total_items,
+            page_size=page_size,
+        )
+
+        leads = await repository.list_search_results(
+            query,
+            limit=page_size,
+            offset=(normalized_page - 1) * page_size,
+        )
+
+    return LeadResultPage(
+        items=tuple(leads),
+        mode=LeadResultMode.SEARCH,
+        page=normalized_page,
+        total_pages=total_pages,
+        total_items=total_items,
+    )
+
+
+async def get_date_result_page(
+    *,
+    start_date: date,
+    end_date: date,
+    page: int,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> LeadResultPage:
+    """Return one paginated creation-date result page."""
+
+    date_from, date_to = get_utc_period(
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    async with async_session_factory() as session:
+        repository = LeadRepository(session)
+
+        total_items = await repository.count_created_between(
+            date_from=date_from,
+            date_to=date_to,
+        )
+        normalized_page, total_pages = _normalize_page(
+            requested_page=page,
+            total_items=total_items,
+            page_size=page_size,
+        )
+
+        leads = await repository.list_created_between(
+            date_from=date_from,
+            date_to=date_to,
+            limit=page_size,
+            offset=(normalized_page - 1) * page_size,
+        )
+
+    return LeadResultPage(
+        items=tuple(leads),
+        mode=LeadResultMode.DATE,
         page=normalized_page,
         total_pages=total_pages,
         total_items=total_items,
