@@ -1,6 +1,9 @@
 from aiogram import Router
 
 from app.bot.handlers.admin import router as admin_router
+from app.bot.handlers.admin_clients import (
+    router as admin_clients_router,
+)
 from app.bot.handlers.admin_close import (
     router as admin_close_router,
 )
@@ -25,6 +28,7 @@ def get_handlers_router() -> Router:
     router.include_router(admin_leads_router)
     router.include_router(admin_close_router)
     router.include_router(admin_search_router)
+    router.include_router(admin_clients_router)
     router.include_router(lead_form_router)
     router.include_router(main_menu_router)
 
