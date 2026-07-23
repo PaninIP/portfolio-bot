@@ -32,14 +32,15 @@ async def configure_bot_profile(bot: Bot) -> None:
         await bot.set_my_name(name="Panini")
         await bot.set_my_short_description(
             short_description=(
-                "Panini — разработка Telegram-ботов "
-                "и автоматизация бизнес-процессов."
+                "Telegram-боты-визитки и системы "
+                "сбора клиентских заявок."
             )
         )
         await bot.set_my_description(
             description=(
-                "Panini помогает узнать об услугах по разработке "
-                "Telegram-ботов и оформить заявку на новый проект."
+                "Panini показывает доступные услуги, знакомит "
+                "с реализованным проектом и помогает оставить "
+                "заявку на разработку Telegram-бота."
             )
         )
     except TelegramAPIError:
