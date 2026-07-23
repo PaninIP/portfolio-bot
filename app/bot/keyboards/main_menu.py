@@ -6,8 +6,8 @@ from app.bot.keyboards.admin import ADMIN_PANEL_BUTTON
 
 ABOUT_BUTTON = "👤 Обо мне"
 SERVICES_BUTTON = "🛠 Услуги"
-PORTFOLIO_BUTTON = "📁 Примеры работ"
-DISCUSS_PROJECT_BUTTON = "📝 Обсудить проект"
+PORTFOLIO_BUTTON = "📂 Портфолио"
+LEAVE_APPLICATION_BUTTON = "📝 Оставить заявку"
 
 
 def get_main_menu_keyboard(
@@ -35,7 +35,7 @@ def get_main_menu_keyboard(
         ],
         [
             KeyboardButton(
-                text=DISCUSS_PROJECT_BUTTON,
+                text=LEAVE_APPLICATION_BUTTON,
                 style=ButtonStyle.SUCCESS,
             ),
         ],

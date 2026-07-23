@@ -42,7 +42,7 @@ from app.bot.keyboards.lead_form import (
     get_name_choice_keyboard,
 )
 from app.bot.keyboards.main_menu import (
-    DISCUSS_PROJECT_BUTTON,
+    LEAVE_APPLICATION_BUTTON,
     get_main_menu_keyboard,
 )
 from app.bot.states.lead_form import LeadForm
@@ -312,8 +312,8 @@ async def handle_admin_panel_from_form(
     await show_admin_panel(message)
 
 
-@router.message(F.text == DISCUSS_PROJECT_BUTTON)
-async def handle_discuss_project(
+@router.message(F.text == LEAVE_APPLICATION_BUTTON)
+async def handle_leave_application(
     message: Message,
     state: FSMContext,
 ) -> None:
