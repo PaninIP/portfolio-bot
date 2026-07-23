@@ -1,5 +1,5 @@
 from aiogram import F, Router
-from aiogram.types import Message
+from aiogram.types import FSInputFile, Message
 
 from app.bot.keyboards.main_menu import (
     ABOUT_BUTTON,
@@ -55,30 +55,38 @@ async def handle_services(message: Message) -> None:
 
 @router.message(F.text == PORTFOLIO_BUTTON)
 async def handle_portfolio(message: Message) -> None:
-    """Show the current portfolio case."""
+    """Show the current portfolio case with its presentation."""
 
-    await message.answer(
-        "<b>Panini — бот для сбора и обработки заявок</b>\n\n"
-        "Вы сейчас находитесь внутри этого проекта.\n\n"
-        "<b>Задача</b>\n"
-        "Создать Telegram-бота, через которого клиент может "
-        "ознакомиться с услугами и отправить структурированную "
-        "заявку.\n\n"
-        "<b>Пользовательская часть</b>\n"
-        "• пошаговое заполнение заявки;\n"
-        "• передача контакта Telegram;\n"
-        "• описание проекта, срок и бюджет;\n"
-        "• комментарии и вложения;\n"
-        "• предварительный просмотр перед отправкой.\n\n"
-        "<b>Административная часть</b>\n"
-        "• новые, активные и закрытые заявки;\n"
-        "• карточки клиентов и история обращений;\n"
-        "• поиск, фильтрация и архив;\n"
-        "• изменение статусов и управление уведомлениями;\n"
-        "• повторный просмотр сохранённых вложений.\n\n"
-        "<b>Техническая часть</b>\n"
-        "Python, aiogram, PostgreSQL, SQLAlchemy, Alembic, "
-        "Docker Compose и VPS. Данные сохраняются после "
-        "перезапуска, для базы настроены резервные копии.",
+    portfolio_image = FSInputFile(
+        "assets/portfolio/panini-case.png"
+    )
+
+    await message.answer_photo(
+        photo=portfolio_image,
+        caption=(
+            "<b>Panini — Telegram-бот для сбора "
+            "клиентских заявок</b>\n\n"
+            "Вы сейчас находитесь внутри работающего проекта.\n\n"
+            "<b>Задача проекта</b>\n"
+            "Создать бота-визитку, который знакомит клиента "
+            "с услугами, собирает структурированную заявку "
+            "и помогает администратору сопровождать обращение "
+            "от получения до закрытия.\n\n"
+            "<b>Для клиента</b>\n"
+            "• пошаговая форма заявки;\n"
+            "• передача контакта Telegram;\n"
+            "• указание задачи, срока и бюджета;\n"
+            "• отправка документов, фото, видео и аудио;\n"
+            "• проверка заявки перед отправкой.\n\n"
+            "<b>Для администратора</b>\n"
+            "• новые, активные и закрытые заявки;\n"
+            "• поиск, фильтры, архив и каталог клиентов;\n"
+            "• изменение статусов и связь с клиентом;\n"
+            "• просмотр вложений и управление уведомлениями.\n\n"
+            "<b>Технологии</b>\n"
+            "Python, aiogram, PostgreSQL, SQLAlchemy, Alembic, "
+            "Docker Compose и VPS. Для базы настроены "
+            "резервные копии."
+        ),
         parse_mode="HTML",
     )
